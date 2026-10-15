@@ -17,6 +17,10 @@
   --radius: 0.78rem;
   --shadow: 0 0.11rem 0.55rem rgba(120, 90, 40, .08);
   --touch: 2.4rem;
+  /* 宿主 App 的「回去／首頁」按鈕會疊在視口左下角（86px 高＋8px 邊距＝94px）：
+     底部整條保留帶隨視口高度定（11vh），但不得低于 94px——矮橫式視口（如遊戲視窗
+     758px 高）11vh 只有 83px，按鈕會壓到內容。橫式平板各頁面內容一律不進入此帶。 */
+  --app-zone-h: max(11vh, 94px);
 }
 /* 根字級＝介面總放大倍率（由 app.js 依 .fs-18/.fs-20/.fs-22 設定；預設標準 18px） */
 html { font-size: var(--fs, 18px); }
@@ -233,21 +237,23 @@ main {
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   color: #555;
 }
+/* 注音：本字正上方一列（教科書田字格慣例，不佔角落、長注音不折行）。
+   卡片為 flex 欄：.card-body（注音＋本字）置中，角上留 部首/筆數/認 徽章。 */
+.char-card .card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18em;
+}
 .char-card .zhuyin {
-  position: absolute;
-  top: 0.2rem;
-  left: 0.35rem;
-  right: 0.35rem;
-  font-size: clamp(0.72rem, 2.4vw, 0.82rem);
-  font-weight: 500;
+  font-size: 0.92rem;
+  font-weight: 600;
   font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
   color: var(--blue);
-  line-height: 1.25;
-  white-space: normal;
-  cursor: pointer;
+  line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
 }
-/* 認讀字卡：右上角「認」標章，注音讓出該區避免重疊（全寬度生效） */
-.char-card:has(.type-tag) .zhuyin { right: 3.6rem; }
 .char-card .rad-badge {
   position: absolute;
   bottom: 0.28rem;
@@ -553,6 +559,9 @@ main {
 }
 .detail-dict summary::-webkit-details-marker { display: none; }
 .detail-dict summary::before { content: "▸ "; }
+/* 明確隱藏閉合時的正文（此裝置 Chromium 的閉合 <details> 不套用 UA 的
+   content-visibility:hidden，body 會留下不繪製的 layout 盒、造成虛幻捲動） */
+.detail-dict:not([open]) .dict-body { display: none; }
 .detail-dict[open] summary::before { content: "▾ "; }
 .dict-body { margin-top: 0.55rem; font-size: 0.83rem; line-height: 1.7; }
 .dict-rad {
@@ -610,17 +619,12 @@ main {
   border-radius: 999px;
   white-space: nowrap;
 }
-.dict-exbtn {
-  border: none;
-  background: #eef1fe;
-  color: var(--blue);
+.dict-ex-inline {
   font-size: 0.78rem;
-  font-weight: 600;
-  border-radius: 0.45rem;
-  padding: 0.22rem 0.55rem;
-  cursor: pointer;
+  font-weight: 500;
+  color: var(--accent);
+  margin-left: 0.2rem;
 }
-.dict-exbtn:active { background: #dde3fb; }
 .dict-defs { margin: 0.4rem 0 0; padding-left: 1.1rem; color: var(--ink); font-size: 0.82rem; }
 .dict-defs li { margin-bottom: 0.3rem; line-height: 1.55; }
 .dict-ex { color: var(--muted); font-size: 0.78rem; margin-left: 0.35rem; }
@@ -639,7 +643,6 @@ main {
 @media (min-width: 720px) {
   .grid { grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: 0.78rem; }
   .char-card .char { font-size: 2.9rem; }
-  .char-card .zhuyin { font-size: clamp(0.78rem, 1.9vw, 0.85rem); line-height: 1.25; }
   .char-card .strokes { font-size: 0.67rem; }
   .char-card {
     background-image:
@@ -667,9 +670,60 @@ main {
   .detail-zhuyin { font-size: 1.22rem; }
 }
 
-/* 橫式平板：欄數太多字卡過小，限制為 6 欄 */
-@media (min-width: 720px) and (max-width: 1100px) and (orientation: landscape) {
-  .grid { grid-template-columns: repeat(6, 1fr); }
+
+/* ── 橫式平板（寬且有足夠高度）：全螢幕左右兩欄，充分利用寬螢幕——
+   左欄：標題（‹返回、大字、✕）＋操作按鈕 2×2＋國語辭典（欄內捲動、置上對齊）；
+   右欄：跨全高的大寫字畫布（邊長隨視口高度定，橫式高度才是瓶頸）；
+   底部（尤其左下角）預留空間給宿主 App 的跳轉／操控按鈕。
+   矮畫面（<600px，如橫式手機）不適用：改用下方單欄＋矮畫面規則。── */
+@media (orientation: landscape) and (min-width: 720px) and (min-height: 600px) {
+  .detail { padding: 0; }
+  .detail-inner {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: clamp(320px, 27vw, 420px) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 0.55rem 1.4rem;
+    padding: calc(0.9rem + env(safe-area-inset-top))
+             calc(1.1rem + env(safe-area-inset-right))
+             calc(var(--app-zone-h) + env(safe-area-inset-bottom))
+             calc(1.1rem + env(safe-area-inset-left));
+  }
+  /* 左欄：標題 → 操作按鈕 → 字典（字典吃剩餘高度、欄內捲動，不會延伸到左下角） */
+  .detail-head { grid-column: 1; grid-row: 1; }
+  .detail-actions {
+    grid-column: 1; grid-row: 2;
+    margin-top: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+  }
+  .detail-actions .btn { min-width: 0; justify-content: center; }
+  /* 字典：grid 第 3 列（minmax(0,1fr)、有確定高度）本身當捲動容器。
+     不用 <details> 上的 display:flex——受其 shadow slot 影響無法約束子元素，
+     正文會越出保留帶。改為整個 <details> 在欄內捲動、閉合盒一併裁掉。 */
+  .detail-dict {
+    grid-column: 1; grid-row: 3;
+    margin: 0.25rem 0 1.4rem;
+    min-height: 0;
+    display: block;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .detail-dict .dict-body { max-height: none; overflow: visible; }
+  /* 右欄：大畫布跨全高；正方形邊長＝min(欄寬, 視口高－頂欄與底部預留) */
+  .canvas-zone {
+    grid-column: 2; grid-row: 1 / -1;
+    margin: 0; max-width: none; min-height: 0;
+    align-content: center;
+  }
+  .canvas-stack { width: min(100%, calc(100dvh - var(--app-zone-h) - 1.4rem)); }
+  .detail-char { font-size: 4rem; }
+  .detail-zhuyin { font-size: 1.25rem; }
 }
 
 /* ── 手機（直式）：全螢幕寫字畫面 ────────── */
@@ -940,6 +994,75 @@ main {
 .ch-info .i-zy { font-size: 8pt; color: var(--blue); font-weight: 700; }
 .ch-info .i-meta { font-size: 6.8pt; color: var(--muted); }
 .ch-info .i-ex { color: var(--accent); }
+/* ── 橫式平板（寬且有足夠高度）：其餘頁面同樣全螢幕、充分利用寬度，
+   底部（尤其左下角）預留空間給宿主 App 的跳轉／操控按鈕。── */
+@media (orientation: landscape) and (min-width: 720px) and (min-height: 600px) {
+  /* 字卡頁：取消 1200px 限寬、卡片加寬（約 5–11 欄隨視口） */
+  main {
+    max-width: none;
+    padding: 0.8rem 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+  }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(7.4rem, 1fr)); gap: 0.85rem; }
+  .char-card .char { font-size: 3.3rem; }
+
+  /* 選課：左欄＝步驟卡片（版本／年級／學期／課次），
+     右欄＝總結＋開始練習按鈕（置底），左下角因此保持空著 */
+  .setup {
+    padding: calc(1.1rem + env(safe-area-inset-top)) 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+  .setup-inner {
+    max-width: none;
+    height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.6rem 1.6rem;
+    overflow: clip;
+  }
+  .setup-head { grid-column: 1 / -1; text-align: left; margin-bottom: 0.2rem; }
+  .setup-steps { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: clip; overscroll-behavior: contain; padding-right: 0.3rem; }
+  .setup-cards { grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); }
+  .setup-foot {
+    grid-column: 2; grid-row: 2; align-self: end;
+    flex-direction: column; align-items: stretch;
+    margin-top: 0; padding-top: 0; border-top: none;
+    gap: 0.7rem;
+  }
+  .setup-summary { flex: none; }
+  .setup-foot .btn { font-size: 1.05rem; padding: 0.8rem 1.2rem; }
+
+  /* 習字本：橫式一列並排兩頁 A4（維持 210:297 比例），充分利用寬螢幕 */
+  .sheet-scroll {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 1rem;
+    padding: 1rem 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+  }
+  /* 一列兩頁並排，各頁維持 A4 比例(190/266)；
+     寬度＝min(欄寬, 可用高×比例)，可用高＝視口高－工具列(≈3.6rem)－上下padding(≈2rem)－底部保留帶
+     → 頁面高度天然受限、整頁不與左下角按鈕重疊；置中於欄中 */
+  .sheet-page {
+    width: min(100%, calc((100dvh - var(--app-zone-h) - 5.6rem) * 190 / 266));
+    flex: none;
+    min-height: 0;
+    aspect-ratio: 190 / 266;
+    justify-self: center;
+  }
+  /* 一頁 8 字在矮橫式視口（如遊戲視窗 ≈758px 高）放不下全寬格子：
+     表頭/內距/註解為固定 mm・pt、不隨頁縮，每列＝格子＋列距＋註解。
+     格子寬＝min(軌道寬, 每列可用高)；每列可用高＝
+     （視口高－保留帶－工具列 5.6rem－表頭＋頁內距＋8×列距註解 11.3rem）÷8。
+     置中於軌道、不裁切不越頁、不壓左下角按鈕；高視口時 100% 較小、無影響。
+     必須給明確 width（僅 justify-self:center 會取內容寬 0；% 對 1fr 軌道可解析、無循環）。
+     列印走 @media print，不受影響 */
+  .sheet-page .cell {
+    width: min(100%, calc((100dvh - var(--app-zone-h) - 16.9rem) / 8));
+    justify-self: center;
+  }
+}
+
 /* 列印：只印習字本（A4、每課一頁）。
    舊式 body * { visibility: hidden }＋.sheet 固定浮層：手機瀏覽器會把多頁內容
    裁切成一視口高（iOS 尤甚）。改用 display 隱藏其餘元素＋.sheet 常態流內，
@@ -960,5 +1083,7 @@ main {
     break-after: page;
     padding: 4mm 3mm 4mm;
   }
+  /* 橫式列印時 landscape 媒體查詢仍命中、格子會縮小：復原全寬（A4 縱向 8 列放得下） */
+  .sheet-page .cell { width: 100%; justify-self: stretch; }
   .sheet-page:last-child { page-break-after: auto; break-after: auto; }
 }

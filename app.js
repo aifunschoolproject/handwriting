@@ -2,7 +2,7 @@
  * 資料來源：
  *   115上114下學期生字表 xlsx（南一／康軒／翰林）→ data.js
  *   教育部《國語辭典》2014 版匯出 → dict.js（逐讀音 注音/釋義/例詞/部首/IDS，含字詞號）
- *   唸字：瀏覽器 Web Speech TTS（zh-TW，多音字唸例詞帶對音）
+ *   唸字功能已移除（內嵌瀏覽器無 TTS）；注音改為版面顯示
  *   HanziWriter（筆順動畫＋逐筆練習）
  * DATA[版本][年級 1..6][學期 1|2][課次 '0'=特殊單元,'1'..'12'] = [{name,zhuYin,fullStroke,radical,type}]
  * ──────────────────────────────────────────────────────── */
@@ -172,17 +172,15 @@ function renderGrid() {
     card.className = 'char-card' + (d.has(c.name) ? ' done' : '');
     card.dataset.name = c.name;
     card.innerHTML =
-      `<span class="zhuyin" title="點一下唸字">${c.zhuYin}</span>` +
+      `<div class="card-body">` +
+      `<span class="zhuyin">${c.zhuYin}</span>` +
       `<span class="char">${c.name}</span>` +
-      `<span class="strokes">${c.fullStroke} 筆</span>` +
+      `</div>` +
       (radForm ? `<span class="rad-badge" title="部首：${dc?.radical || radForm}">${radForm}</span>` : '') +
+      `<span class="strokes">${c.fullStroke} 筆</span>` +
       (c.type === '認讀字' ? '<span class="type-tag" title="認讀字（認得即可）">認</span>' : '') +
       (d.has(c.name) ? '<span class="done-mark">✔</span>' : '');
     card.addEventListener('click', () => openDetail(c));
-    card.querySelector('.zhuyin').addEventListener('click', (e) => {
-      e.stopPropagation();
-      speak(c.name, dc);
-    });
     frag.appendChild(card);
   }
   grid.appendChild(frag);
@@ -373,18 +371,16 @@ function renderDict(c) {
       <span class="dict-rad-chip">${rad}</span>
       <span class="dict-rad-text">${bpmf(`偏旁是「${rad}」，這個字由「${parts}」組成`)}</span></div>`;
   }
-  // 讀音列（課本音標「課本」，每讀音自帶釋義與例詞點播）
+  // 讀音列（課本音標「課本」，每讀音自帶釋義與例詞）
   h += '<div class="dict-readings">';
   for (const r of d.readings) {
     const isBook = bookHit === r;
-    const word = r.ex ? r.ex.split('、')[0] : c.name;
     const defs = r.defs || [];
     h += `<div class="dict-reading-group${isBook ? ' is-book' : ''}">
       <div class="dict-reading">
         <span class="dict-zy">${r.z}</span>
         ${isBook ? '<span class="book-tag">課本</span>' : ''}
-        <button type="button" class="dict-play" title="唸這個音" aria-label="唸 ${r.z}">🔊</button>
-        ${r.ex ? `<button type="button" class="dict-exbtn" data-word="${word}">${bpmf(r.ex)}</button>` : ''}
+        ${r.ex ? `<span class="dict-ex-inline">${bpmf(r.ex)}</span>` : ''}
       </div>`;
     if (defs.length) {
       h += '<ol class="dict-defs">';
@@ -397,14 +393,6 @@ function renderDict(c) {
   }
   h += '</div>';
   dictBody.innerHTML = h;
-  dictBody.querySelectorAll('.dict-exbtn').forEach((b) => {
-    b.addEventListener('click', () => say(b.dataset.word, 0.75));
-  });
-  dictBody.querySelectorAll('.dict-reading').forEach((row) => {
-    const zy = row.querySelector('.dict-zy').textContent;
-    const reading = d.readings.find((r) => r.z === zy);
-    row.querySelector('.dict-play').addEventListener('click', () => speak(c.name, d, reading));
-  });
 }
 
 /* ── 詳細視窗 ── */
@@ -443,57 +431,6 @@ function closeDetail() {
 
 
 
-/* ── 唸字：瀏覽器 TTS（Web Speech zh-TW），多音字唸含該字的例詞以帶出正確聲調 ── */
-// 必須與 .build/plan_clips.py 的 clean() 完全一致（保留：文字清洗邏輯）
-function cleanSpeechText(t) {
-  if (!t) return '';
-  let s = String(t);
-  s = s.replace(/<[^>]+>/g, '');      // HTML 標籤殘留
-  s = s.replace(/&[a-zA-Z0-9]+;?/g, ''); // HTML 實體（&gif;/&8e79.…）
-  s = s.replace(/[a-zA-Z0-9_]/g, '');  // 其餘 ASCII（圖片 macro 殘骸）
-  s = s.replace(/《|》/g, '');
-  const PUNCT = '。．.！!？?，,、…～~；;：:·"\'“”‘’「」『』（）()〈〉<> ';
-  let a = 0, b = s.length;
-  while (a < b && (PUNCT.includes(s[a]) || /\s/.test(s[a]))) a++;
-  while (b > a && (PUNCT.includes(s[b - 1]) || /\s/.test(s[b - 1]))) b--;
-  s = s.slice(a, b).replace(/\s+/g, '');
-  if (s.length > 8) s = s.slice(0, 8);
-  return s;
-}
-function speakTTS(text, rate) {
-  if (!('speechSynthesis' in window)) { alert('此瀏覽器不支援語音'); return; }
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = rate ?? 0.8;
-  const vs = speechSynthesis.getVoices();
-  const tw = vs.find((v) => v.lang === 'zh-TW') || vs.find((v) => v.lang.startsWith('zh'));
-  if (tw) u.voice = tw;
-  speechSynthesis.cancel();
-  // iOS 上 cancel 後立即 speak 會被切斷，需短暫延遲
-  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (isIOS) setTimeout(() => speechSynthesis.speak(u), 60);
-  else speechSynthesis.speak(u);
-}
-function say(text, rate) {
-  const t = cleanSpeechText(text);
-  if (t) speakTTS(t, rate);
-}
-function pickReading(dc, name, bookZy, reading) {
-  const rs = dc?.readings;
-  if (!rs || rs.length <= 1) return rs ? rs[0] : null;
-  if (reading) return rs.find((r) => r === reading) || null;
-  return bookZyHit(dc, bookZy) || rs[0];
-}
-function speak(name, dc, reading) {
-  const bookZy = courseZhuYin(name);
-  const r = pickReading(dc, name, bookZy, reading) || null;
-  // 瀏覽器 TTS：唸含該字的例詞(讓多音字唸對音)，無例詞則唸本字
-  if (r?.ex) { say(r.ex.split('、')[0], 0.75); return; }
-  say(name, 0.8);
-}
-function courseZhuYin(name) {
-  for (const c of courseChars()) if (c.name === name) return c.zhuYin;
-  return null;
-}
 /* ── 習字本／學習手冊（生成＋列印）─────────────
  * 每字一組：六格全寬（範字／筆順＋號／描紅／空格×3）在上，
  * 學習手冊註解（注音・筆畫・部首・釋義・例詞）整行在下；
@@ -708,7 +645,6 @@ function bind() {
   $('btnAnimate').addEventListener('click', playAnimate);
   $('btnQuiz').addEventListener('click', startQuiz);
   $('btnClear').addEventListener('click', resetWriter);
-  $('btnSpeak').addEventListener('click', () => { if (state.currentChar) speak(state.currentChar.name, DICT[state.currentChar.name]); });
   $('btnGrid').addEventListener('click', () => setGrid(!state.gridOn));
   $('btnGhost').addEventListener('click', () => setGhost(!state.ghostOn));
   $('btnPrev').addEventListener('click', () => { closeDetail(); stepCourse(-1); });
@@ -742,9 +678,6 @@ function bind() {
     if (!b) return;
     setFs(Number(b.dataset.fs));
   });
-
-  // 語音清單可能延遲載入
-  if ('speechSynthesis' in window) speechSynthesis.getVoices();
 }
 
 /* ── 介面用字加注音（bpmf.js）：只在「學習內容」區域加注音（課次說明、國語辭典）。

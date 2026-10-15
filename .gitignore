@@ -12,3 +12,5 @@ _*.mp3
 
 # 構建/診斷
 .build/
+.codegraph/
+codegraph.db*
