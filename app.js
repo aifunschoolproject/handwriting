@@ -241,56 +241,6 @@ function ensureSvgScale() {
   svg.style.display = 'block';
 }
 
-// 筆順編號疊層：每筆行進 15% 處標 1..N（習字本筆順號）， pointer-events:none 不擋手寫。
-// 座標換算必須與 HanziWriter 的 positioner 完全一致（y 向上、含 -124..900 偏移），
-// 數字才會落在畫布實際筆順位置。中線現為等距取樣，點序即弧長順序。
-function medianPointAt(m, frac) {
-  const n = m.length;
-  const f = Math.min(0.95, Math.max(0.05, frac)) * (n - 1);
-  const k = Math.min(n - 2, Math.floor(f));
-  const t = f - k;
-  const a = m[k], b = m[k + 1];
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-}
-function strokeNumbers(name) {
-  const old = writerBox.querySelector('.stroke-num');
-  if (old) old.remove();
-  const d = window.HANZI_DATA && window.HANZI_DATA[name];
-  if (!d || !d.medians) return;
-  const pad = 12; // 與 HanziWriter.create 的 padding 一致
-  const W = WRITER_SIZE, H = WRITER_SIZE;
-  const RX = 0, RY = -124, TX = 1024, TY = 900; // HanziWriter 資料框
-  const scale = Math.min((W - 2 * pad) / (TX - RX), (H - 2 * pad) / (TY - RY));
-  const xOff = -RX * scale + pad + ((W - 2 * pad) - scale * (TX - RX)) / 2;
-  const yOff = -RY * scale + pad + ((H - 2 * pad) - scale * (TY - RY)) / 2;
-  const NS = 'http://www.w3.org/2000/svg';
-  const c = document.createElementNS(NS, 'svg');
-  c.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  c.classList.add('stroke-num');
-  const placed = [];
-  d.medians.forEach((m, i) => {
-    const p = m && medianPointAt(m, 0.15);
-    if (!p) return;
-    // data → 螢幕（與 HanziWriter 同式）：y 向上 → 螢幕 y 向下
-    const x0 = xOff + p[0] * scale, y0 = H - yOff - p[1] * scale;
-    // 編號貼在行進 15% 處；與既放編號太近時朝字心微移（不離開本筆）
-    let x = x0, y = y0;
-    for (const off of [0, 26, 52, 78]) {
-      const dx = W / 2 - x0, dy = H / 2 - y0;
-      const L = Math.hypot(dx, dy) || 1;
-      x = Math.max(28, Math.min(W - 28, x0 + (dx / L) * off));
-      y = Math.max(28, Math.min(H - 28, y0 + (dy / L) * off));
-      if (placed.every((q) => Math.hypot(q.x - x, q.y - y) > 48)) break;
-    }
-    placed.push({ x, y });
-    const t = document.createElementNS(NS, 'text');
-    t.textContent = i + 1;
-    t.setAttribute('x', x);
-    t.setAttribute('y', y);
-    c.appendChild(t);
-  });
-  writerBox.appendChild(c);
-}
 function fallbackStatic(name) {
   // 無筆順資料：顯示靜態大字供臨摹。
   if (svgObserver) { svgObserver.disconnect(); svgObserver = null; }
@@ -332,7 +282,6 @@ function showWriter(name) {
     const failed = !writer || !writer._character || writer._loadingManager.loadingFailed;
     if (failed) { fallbackStatic(name); return; }
     ensureSvgScale();
-    strokeNumbers(name);
     startQuiz();
   }).catch(() => {
     if (state.currentName === name) fallbackStatic(name);
@@ -553,11 +502,9 @@ function courseZhuYin(name) {
 const SHEET_PAGE_CHARS = 8;
 const SHEET_NS = 'http://www.w3.org/2000/svg';
 
-// 筆順 SVG（紅筆畫＋筆順號 1..N）；無筆順資料回 null（該格變空格）。
-// 筆畫資料為 hanzi-writer 慣例：x 左原點、y 下原點（y 向上，大 y＝上端，
-// 資料框 x 0..1024 / y -124..900）。SVG 座標 y 向下，故群組翻轉＋縮放讓筆畫正立；
-// 筆順號在翻轉後（y 向下）座標另算，避免文字上下顛倒。
-// 號位：每筆 15% 處朝字心移開；多筆字彼此太近時逐級加大位移，避免重疊。
+// 筆順 SVG（紅筆畫，無筆順號）；無筆順資料回 null（該格變空格）。
+// 筆畫資料為 hanzi-writer 慣例：y 向上、資料框 x 0..1024 / y -124..900；
+// SVG 座標 y 向下，故群組翻轉＋縮放讓筆畫正立。
 function strokeSvg(name) {
   const d = window.HANZI_DATA && window.HANZI_DATA[name];
   if (!d || !d.strokes) return null;
@@ -574,32 +521,10 @@ function strokeSvg(name) {
     g.appendChild(p);
   });
   svg.appendChild(g);
-  const placed = [];
-  d.medians.forEach((m, i) => {
-    const pt = m && medianPointAt(m, 0.15);
-    if (!pt) return;
-    const sx = pt[0] * s, sy = (900 - pt[1]) * s; // 翻轉後 y 向下座標
-    let x = sx, y = sy;
-    for (const off of [0, 60, 120, 180]) {
-      const dx = 500 - sx, dy = 500 - sy;
-      const L = Math.hypot(dx, dy) || 1;
-      x = Math.max(58, Math.min(942, sx + (dx / L) * off));
-      y = Math.max(58, Math.min(942, sy + (dy / L) * off));
-      if (placed.every((q) => Math.hypot(q.x - x, q.y - y) > 175)) break;
-    }
-    placed.push({ x, y });
-    const t = document.createElementNS(SHEET_NS, 'text');
-    t.setAttribute('x', x);
-    t.setAttribute('y', y);
-    t.setAttribute('text-anchor', 'middle');
-    t.setAttribute('dominant-baseline', 'central');
-    t.textContent = i + 1;
-    svg.appendChild(t);
-  });
   return svg;
 }
 
-// 一格：cls='cell-ref' 黑字／'cell-stroke' 筆順＋號／'cell-trace' 淡灰描紅／'cell-blank' 空格。
+// 一格：cls='cell-ref' 黑字／'cell-stroke' 紅筆順／'cell-trace' 淡灰描紅／'cell-blank' 空格。
 // 範字／描紅用 SVG 文字（viewBox 0 0 1000 1000），隨格子等比縮放，
 // 手機小格與 A4 大格字體比例一致，不會溢出格子。
 function sheetCell(name, cls) {
@@ -627,7 +552,7 @@ function sheetCell(name, cls) {
 }
 
 function sheetRow(ch) {
-  const opts = { stroke: $('sheetStrokeNo').checked, trace: $('sheetTrace').checked,
+  const opts = { stroke: $('sheetStroke').checked, trace: $('sheetTrace').checked,
                  dict: $('sheetDict').checked, pinyin: $('sheetPinyin').checked };
   const row = document.createElement('div');
   row.className = 'ch-row';
@@ -806,7 +731,7 @@ function bind() {
   $('btnSheet').addEventListener('click', openSheet);
   $('btnSheetClose').addEventListener('click', closeSheet);
   $('btnSheetPrint').addEventListener('click', () => window.print());
-  for (const id of ['sheetGrade', 'sheetStrokeNo', 'sheetPinyin', 'sheetDict', 'sheetTrace']) {
+  for (const id of ['sheetGrade', 'sheetStroke', 'sheetPinyin', 'sheetDict', 'sheetTrace']) {
     $(id).addEventListener('change', renderSheet);
   }
 

@@ -21,9 +21,15 @@
 /* 根字級＝介面總放大倍率（由 app.js 依 .fs-18/.fs-20/.fs-22 設定；預設標準 18px） */
 html { font-size: var(--fs, 18px); }
 
-/* ── 注音符號 web font（源泉注音圓體，參考 afs-apsa）──
-   平板/iPad/Android 預設字體對注音呈現不一致；自載字型確保符號
-   清晰一致。只套在注音符號上，漢字仍走楷體/黑體。 */
+/* ── 字型（自載子集，確保各裝置一致）──
+   漢字：全字庫正楷體 TW-Kai（CNS11643，OFL-1.1）子集——正楷字形、各裝置一致；
+         子集含全課生字＋國語辭典釋義例詞＋介面用字（見 .build/make_font.py）。
+   注音符號：源泉注音圓體 BpmfGenSenRounded（TW-Kai 的注音為日文片假名，不用）。 */
+@font-face {
+  font-family: "TW-Kai";
+  src: url("fonts/TW-Kai.woff2") format("woff2");
+  font-display: swap;
+}
 @font-face {
   font-family: "BpmfGenSenRounded";
   src: url("fonts/BpmfGsr.woff2") format("woff2");
@@ -211,7 +217,7 @@ main {
 }
 .char-card .char {
   font-size: clamp(2.3rem, 10vw, 3.2rem);
-  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   color: #555;
 }
 .char-card .zhuyin {
@@ -230,7 +236,7 @@ main {
   bottom: 0.28rem;
   left: 0.33rem;
   font-size: 0.72rem;
-  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   color: #c2410c;
   background: #fff3ea;
   border: 1px solid #ffd9c2;
@@ -325,7 +331,7 @@ main {
 .detail-char {
   font-size: 3.3rem;
   line-height: 1.1;
-  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
 }
 .detail-zhuyin {
   color: var(--blue);
@@ -416,27 +422,13 @@ main {
   width: 100%;
   height: 100%;
 }
-/* 筆順編號疊層（習字本筆順號，不擋手寫） */
-.writer-box .stroke-num {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-}
-.writer-box .stroke-num text {
-  font-family: "Microsoft JhengHei", sans-serif;
-  font-size: 34px;
-  font-weight: 700;
-  fill: #d4380d;
-  opacity: .85;
-}
 .static-char {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   font-size: min(46vw, 180px);
   color: rgba(60, 60, 60, 0.25);
   padding: 1.35rem;
@@ -556,7 +548,7 @@ main {
 }
 .dict-rad-chip {
   font-size: 1.35rem;
-  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   color: #c2410c;
   background: #fff;
   border: 1px solid #ffd9c2;
@@ -908,21 +900,11 @@ main {
 .cell svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* 範字／描紅：SVG 文字隨格等比 */
 .cell-glyph {
-  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   font-size: 640px;
 }
 .cell-ref .cell-glyph { fill: var(--ink); }
 .cell-trace .cell-glyph { fill: rgba(60, 60, 60, .30); }
-/* 筆順號：viewBox 絕對字號（隨格等比）、白暈圈讓紅字在筆畫上可讀 */
-.cell-stroke svg text {
-  font-family: "Microsoft JhengHei", sans-serif;
-  font-size: 92px;
-  font-weight: 700;
-  fill: #d4380d;
-  paint-order: stroke;
-  stroke: #fff;
-  stroke-width: 16px;
-}
 .cell-stroke svg path {
   fill: rgba(212, 56, 13, .40);
   stroke: none;
