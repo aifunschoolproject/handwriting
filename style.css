@@ -672,7 +672,7 @@ main {
 
 
 /* ── 橫式平板（寬且有足夠高度）：全螢幕左右兩欄，充分利用寬螢幕——
-   左欄：標題（‹返回、大字、✕）＋操作按鈕 2×2＋國語辭典（欄內捲動、置上對齊）；
+   左欄：標題（‹返回、大字、✕）＋APP 式操作大鈕直排＋國語辭典（均欄內捲動）；
    右欄：跨全高的大寫字畫布（邊長隨視口高度定，橫式高度才是瓶頸）；
    底部（尤其左下角）預留空間給宿主 App 的跳轉／操控按鈕。
    矮畫面（<600px，如橫式手機）不適用：改用下方單欄＋矮畫面規則。── */
@@ -685,10 +685,10 @@ main {
     max-height: none;
     border-radius: 0;
     box-shadow: none;
-    overflow: hidden;
+    overflow: clip;
     display: grid;
     grid-template-columns: clamp(320px, 27vw, 420px) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
     gap: 0.55rem 1.4rem;
     padding: calc(0.9rem + env(safe-area-inset-top))
              calc(1.1rem + env(safe-area-inset-right))
@@ -697,12 +697,27 @@ main {
   }
   /* 左欄：標題 → 操作按鈕 → 字典（字典吃剩餘高度、欄內捲動，不會延伸到左下角） */
   .detail-head { grid-column: 1; grid-row: 1; }
+  /* APP 式操作鈕：整寬大鈕直排左對齊（平板好按） */
   .detail-actions {
     grid-column: 1; grid-row: 2;
     margin-top: 0;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+    min-height: 0;
+    overflow-y: auto; overflow-x: clip;
+    overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 0.55rem;
   }
-  .detail-actions .btn { min-width: 0; justify-content: center; }
+  .detail-actions .btn {
+    min-width: 0; min-height: 3.1rem;
+    font-size: 1.08rem; font-weight: 600;
+    padding: 0.6rem 0.95rem;
+    border-radius: 0.72rem;
+    display: flex; align-items: center; gap: 0.45rem;
+    justify-content: flex-start;
+  }
+  /* 換課箭頭與返回／關閉鈕放大 */
+  .side-arrow { width: 3rem; height: 3rem; font-size: 1.75rem; }
+  .detail-head .btn-sm { min-width: 2.9rem; min-height: 2.9rem; font-size: 1.4rem; }
+  .detail-head .icon-btn { width: 2.9rem; height: 2.9rem; font-size: 1.15rem; }
   /* 字典：grid 第 3 列（minmax(0,1fr)、有確定高度）本身當捲動容器。
      不用 <details> 上的 display:flex——受其 shadow slot 影響無法約束子元素，
      正文會越出保留帶。改為整個 <details> 在欄內捲動、閉合盒一併裁掉。 */
@@ -1030,7 +1045,9 @@ main {
     gap: 0.7rem;
   }
   .setup-summary { flex: none; }
-  .setup-foot .btn { font-size: 1.05rem; padding: 0.8rem 1.2rem; }
+  .setup-foot .btn { font-size: 1.2rem; padding: 0.95rem 1.2rem; min-height: 3.6rem; border-radius: 0.8rem; font-weight: 700; }
+  /* 頂欄「選課／習字本」同步放大（APP 感） */
+  .topbar .btn-choose { font-size: 0.95rem; min-height: 2.6rem; padding: 0.5rem 1rem; border-radius: 0.6rem; }
 
   /* 習字本：橫式一列並排兩頁 A4（維持 210:297 比例），充分利用寬螢幕 */
   .sheet-scroll {
