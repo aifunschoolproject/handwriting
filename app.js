@@ -331,14 +331,14 @@ function playAnimate() {
 
 function setGhost(on) {
   state.ghostOn = on;
-  $('btnGhost').innerHTML = bpmf(on ? '👁 虛影：開' : '👁 虛影：關');
+  $('btnGhost').textContent = (on ? '👁 虛影：開' : '👁 虛影：關');
   $('btnGhost').setAttribute('aria-pressed', String(on));
   if (writer) (on ? writer.showOutline() : writer.hideOutline());
 }
 function setGrid(on) {
   state.gridOn = on;
   $('writerWrap').classList.toggle('no-grid', !on);
-  $('btnGrid').innerHTML = bpmf(on ? '▦ 格線：開' : '▦ 格線：關');
+  $('btnGrid').textContent = (on ? '▦ 格線：開' : '▦ 格線：關');
   $('btnGrid').setAttribute('aria-pressed', String(on));
 }
 
@@ -726,6 +726,7 @@ function bind() {
   });
   $('btnStart').addEventListener('click', () => applySel(null, null, null, null, true));
   $('btnChoose').addEventListener('click', showSetup);
+  $('btnSetup').addEventListener('click', showSetup);
 
   // 習字本／學習手冊
   $('btnSheet').addEventListener('click', openSheet);
@@ -746,19 +747,14 @@ function bind() {
   if ('speechSynthesis' in window) speechSynthesis.getVoices();
 }
 
-/* ── 介面用字加注音（bpmf.js）：<select> 選項為原生無法加註，
-   其餘標題／標籤／按鈕／說明皆有注音 ── */
+/* ── 介面用字加注音（bpmf.js）：只在「學習內容」區域加注音（課次說明、國語辭典）。
+   標題／篩選器／按鈕等 UI 標籤不加：注音在狹窄標籤會折行、蓋住文字；
+   生字讀音已顯示在字卡、寫字畫面與習字本，UI 標籤不必重複。 */
 function annotateUI() {
   const h1 = document.querySelector('.topbar h1');
-  if (h1) h1.innerHTML = bpmf('✍️ 手寫練習');
+  if (h1) h1.textContent = '✍️ 手寫練習';
   const sum = document.querySelector('.detail-dict > summary');
   if (sum) sum.innerHTML = bpmf('📖 教育部《國語辭典》');
-  document.querySelectorAll('.filter > span').forEach((s) => { s.innerHTML = bpmf(s.textContent); });
-  for (const id of ['btnAnimate', 'btnQuiz', 'btnClear', 'btnSpeak', 'doneFlag', 'btnGhost', 'btnGrid', 'btnChoose', 'btnSheet', 'btnSheetClose', 'btnSheetPrint']) {
-    const e = $(id);
-    if (e) e.innerHTML = bpmf(e.textContent);
-  }
-  document.querySelectorAll('.sheet-title, .sheet-opt .lbl').forEach((s) => { s.innerHTML = bpmf(s.textContent); });
 }
 
 /* ── 進入引導：大圖卡選 版本→年級→學期→課次，點課卡即練 ── */

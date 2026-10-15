@@ -134,11 +134,13 @@ button, select { touch-action: manipulation; }
   white-space: nowrap;
 }
 
-/* 平板以上：篩選器橫排 */
+/* 平板以上：標題靠左、選課／習字本／進度靠右、篩選器換一列橫排（介面用字不加注音，避免折行重疊） */
 @media (min-width: 720px) {
-  .topbar h1 { font-size: 1.17rem; }
-  .filters { flex: 1; order: 0; flex-wrap: nowrap; }
-  .filter { flex: 0 1 auto; min-width: 5.1rem; font-size: 0.78rem; }
+  .topbar { row-gap: 0.4rem; }
+  .topbar h1 { font-size: 1.2rem; }
+  .filters { flex: 0 1 auto; order: 4; flex-wrap: nowrap; gap: 0.6rem; }
+  .filter { flex: 0 1 auto; min-width: 4.9rem; font-size: 0.78rem; }
+  .progress-pill { margin-left: 0; }
 }
 
 /* ── 介面用字加注音：上式（注音疊在字上方）── */
@@ -183,11 +185,22 @@ main {
   max-width: 1200px;
   margin: 0 auto;
 }
-
+.grid-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.grid-head .btn-ghost-btn {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.7rem;
+  min-height: 2.1rem;
+  flex-shrink: 0;
+}
 .class-note {
   color: var(--muted);
   font-size: 0.78rem;
-  margin-bottom: 0.65rem;
+  margin: 0;
 }
 
 .grid {
@@ -222,15 +235,19 @@ main {
 }
 .char-card .zhuyin {
   position: absolute;
-  top: 0.33rem;
-  left: 0.45rem;
-  font-size: clamp(0.7rem, 13.5cqw, 0.95rem);
+  top: 0.2rem;
+  left: 0.35rem;
+  right: 0.35rem;
+  font-size: clamp(0.72rem, 2.4vw, 0.82rem);
   font-weight: 500;
   font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
   color: var(--blue);
+  line-height: 1.25;
   white-space: normal;
   cursor: pointer;
 }
+/* 認讀字卡：右上角「認」標章，注音讓出該區避免重疊（全寬度生效） */
+.char-card:has(.type-tag) .zhuyin { right: 3.6rem; }
 .char-card .rad-badge {
   position: absolute;
   bottom: 0.28rem;
@@ -378,7 +395,9 @@ main {
 }
 .canvas-stack {
   position: relative;
-  width: min(88vw, 520px, calc(100dvh - 11.1rem));
+  /* 寬度以「卡片可用寬」為準（100%），再用 520px 上限；
+     舊式 min(88vw,…) 以視口為準，橫式平板 88vw 會超出 640px 卡片 → 蓋住標題與關閉鈕 */
+  width: min(100%, 520px);
   margin: 0 auto;
   min-width: 0;
 }
@@ -620,7 +639,7 @@ main {
 @media (min-width: 720px) {
   .grid { grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: 0.78rem; }
   .char-card .char { font-size: 2.9rem; }
-  .char-card .zhuyin { font-size: clamp(0.8rem, 13.5cqw, 1.05rem); }
+  .char-card .zhuyin { font-size: clamp(0.78rem, 1.9vw, 0.85rem); line-height: 1.25; }
   .char-card .strokes { font-size: 0.67rem; }
   .char-card {
     background-image:
@@ -666,7 +685,7 @@ main {
     padding: calc(0.55rem + env(safe-area-inset-top)) calc(0.67rem + env(safe-area-inset-right)) calc(0.55rem + env(safe-area-inset-bottom)) calc(0.67rem + env(safe-area-inset-left));
   }
   .detail-head { flex-shrink: 0; }
-  .detail-head #btnBack { display: none; }
+  .detail-head #btnBack { display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem; border-radius: 0.7rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 0.8rem; flex-shrink: 0; box-shadow: var(--shadow); }
   .detail-word { flex: 0 1 auto; min-width: 0; }
   .detail-meta { order: 3; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; padding-top: 0.22rem; gap: 0.22rem; align-items: center; font-size: 0.67rem; }
   .detail-char { font-size: 2.45rem; }
@@ -679,7 +698,7 @@ main {
     min-height: 0;
     gap: 0.35rem;
   }
-  .canvas-stack { width: 100%; max-width: min(60vh, 460px); }
+  .canvas-stack { width: min(100%, 62dvh, 460px); max-width: none; }
   .side-arrow { width: 2.2rem; height: 2.2rem; font-size: 1.22rem; }
 
   .detail-actions { flex-shrink: 0; gap: 0.45rem; }
@@ -921,22 +940,25 @@ main {
 .ch-info .i-zy { font-size: 8pt; color: var(--blue); font-weight: 700; }
 .ch-info .i-meta { font-size: 6.8pt; color: var(--muted); }
 .ch-info .i-ex { color: var(--accent); }
+/* 列印：只印習字本（A4、每課一頁）。
+   舊式 body * { visibility: hidden }＋.sheet 固定浮層：手機瀏覽器會把多頁內容
+   裁切成一視口高（iOS 尤甚）。改用 display 隱藏其餘元素＋.sheet 常態流內，
+   手機與桌面的「列印／儲存 PDF」皆可正常跨頁。 */
 @media print {
   @page { size: A4; margin: 10mm 9mm; }
-  body * { visibility: hidden; }
-  .sheet, .sheet * { visibility: visible; }
-  .sheet { position: absolute; inset: 0; background: #fff; display: block; }
+  body { background: #fff; }
+  body > *:not(.sheet) { display: none !important; }
+  .sheet { position: static; display: block; background: #fff; overflow: visible; }
   .sheet-bar, .no-print { display: none !important; }
   .sheet-scroll { overflow: visible; padding: 0; background: #fff; display: block; }
   .sheet-page {
-    /* 寬＝@page 可印區（A4 210mm − 左右 18mm）；高＝撐滿 A4（277mm） */
     width: 100%;
-    min-height: 277mm;
-    flex: none;
+    min-height: 0;
     box-shadow: none;
-    margin: 0 auto;
+    margin: 0;
     page-break-after: always;
-    padding: 6mm 5mm 5mm;
+    break-after: page;
+    padding: 4mm 3mm 4mm;
   }
-  .sheet-page:last-child { page-break-after: auto; }
+  .sheet-page:last-child { page-break-after: auto; break-after: auto; }
 }
