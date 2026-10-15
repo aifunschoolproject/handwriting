@@ -1,0 +1,14 @@
+# 本機資料（20+GB 語音素材分割檔、原始 xlsx、構建 intermediates）
+dict_concised*.zip*
+dict_concised*.xls*
+115上114下學期生字表_大腦與語言實驗室_20260723.xlsx
+newCharacterEntries.json
+
+# 語音已改用瀏覽器 TTS，mp3 不再需要
+audio/
+tts/
+audio.js
+_*.mp3
+
+# 構建/診斷
+.build/

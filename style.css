@@ -1,0 +1,960 @@
+/* ── 手寫練習 ────────────────────────────────────────────
+ * 兒童視力友善：所有文字／間距以 rem 表記、根字級由 --fs 驅動
+ * （標準 18px／大 20px／特大 22px，頂欄「字號」可切、自動記憶），
+ * 整個介面隨之等比放大；版面幾何（字卡網格、寫字格）仍隨視窗自適應。
+ * 注音字型參考 afs-apsa：自載源泉注音圓體，確保平板呈現一致。
+ * ─────────────────────────────────────────────────────── */
+:root {
+  --bg: #fdf8f1;
+  --card: #ffffff;
+  --ink: #33302c;
+  --muted: #8a8378;
+  --line: #eadfce;
+  --accent: #e8590c;
+  --accent-soft: #fff0e5;
+  --green: #2f9e44;
+  --blue: #4263eb;
+  --radius: 0.78rem;
+  --shadow: 0 0.11rem 0.55rem rgba(120, 90, 40, .08);
+  --touch: 2.4rem;
+}
+/* 根字級＝介面總放大倍率（由 app.js 依 .fs-18/.fs-20/.fs-22 設定；預設標準 18px） */
+html { font-size: var(--fs, 18px); }
+
+/* ── 注音符號 web font（源泉注音圓體，參考 afs-apsa）──
+   平板/iPad/Android 預設字體對注音呈現不一致；自載字型確保符號
+   清晰一致。只套在注音符號上，漢字仍走楷體/黑體。 */
+@font-face {
+  font-family: "BpmfGenSenRounded";
+  src: url("fonts/BpmfGsr.woff2") format("woff2");
+  font-display: swap;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior-y: none;
+}
+
+button, select { touch-action: manipulation; }
+
+/* ── Top bar ─────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  padding-top: calc(0.55rem + env(safe-area-inset-top));
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.topbar h1 { font-size: 1.05rem; white-space: nowrap; }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  flex: 1 1 100%;
+  order: 3;
+}
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.67rem;
+  color: var(--muted);
+  flex: 1 1 45%;
+  min-width: 0;
+}
+.filter select {
+  font-size: 0.83rem;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 0.33rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: #fff;
+  color: var(--ink);
+}
+.filter select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 字號控制（標準／大／特大）：整介面等比放大、自動記憶 */
+.fs-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  background: var(--accent-soft);
+  border: 1px solid #ffd9c2;
+  border-radius: 999px;
+  padding: 0.14rem 0.2rem 0.14rem 0.6rem;
+}
+.fs-ctl-label { font-size: 0.67rem; color: var(--accent); font-weight: 700; }
+.fs-ctl button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.42rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.fs-ctl button.on { background: var(--accent); color: #fff; font-weight: 700; }
+.fs-ctl button:active { transform: scale(.94); }
+
+.progress-pill {
+  margin-left: auto;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.83rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* 平板以上：篩選器橫排 */
+@media (min-width: 720px) {
+  .topbar h1 { font-size: 1.17rem; }
+  .filters { flex: 1; order: 0; flex-wrap: nowrap; }
+  .filter { flex: 0 1 auto; min-width: 5.1rem; font-size: 0.78rem; }
+}
+
+/* ── 介面用字加注音：上式（注音疊在字上方）── */
+.bpmf { display: inline-block; line-height: 1; }
+.bpmf .bpmf-z {
+  display: block;
+  font-style: normal;
+  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
+  font-size: 0.4em;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--blue);
+  white-space: nowrap;
+  text-align: center;
+  margin-bottom: 0.12em;
+  pointer-events: none;
+}
+
+/* ── 旁式注音：注音符號直排顯示於漢字右側（調號拆開對齊）── */
+.z-word { display: inline-flex; align-items: center; vertical-align: middle; margin: 0 1px; }
+.z-char { font-size: 1em; line-height: 1; }
+.z-ruby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.45em;
+  margin-left: 1.5px;
+  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
+  font-weight: 700;
+  color: var(--blue);
+}
+.z-main { display: flex; flex-direction: row; align-items: center; }
+.z-bopo { display: flex; flex-direction: column; align-items: center; line-height: 0.95; }
+.z-bopo span { display: block; }
+.z-tone { font-size: 1.15em; margin-left: 1px; line-height: 1; font-weight: 900; }
+.z-tone-light { font-size: 1.1em; line-height: 0.7; margin-bottom: 0; font-weight: 900; }
+
+/* ── Grid ────────────────────────────────── */
+main {
+  padding: 0.8rem 0.8rem calc(2.2rem + env(safe-area-inset-bottom));
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.class-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-bottom: 0.65rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.9rem, 1fr));
+  gap: 0.65rem;
+  container: grid / inline-size;
+}
+
+.char-card {
+  position: relative;
+  aspect-ratio: 1;
+  background-color: var(--card);
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 1px), #f2c4c4 calc(50% - 1px), #f2c4c4 calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(to bottom, transparent calc(50% - 1px), #f2c4c4 calc(50% - 1px), #f2c4c4 calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(to top right, transparent 49.7%, #f2c4c4 49.7%, #f2c4c4 50.3%, transparent 50.3%),
+    linear-gradient(to bottom left, transparent 49.7%, #f2c4c4 49.7%, #f2c4c4 50.3%, transparent 50.3%);
+  border: 2px solid #e8a0a0;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform .12s, box-shadow .12s;
+}
+.char-card .char {
+  font-size: clamp(2.3rem, 10vw, 3.2rem);
+  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  color: #555;
+}
+.char-card .zhuyin {
+  position: absolute;
+  top: 0.33rem;
+  left: 0.45rem;
+  font-size: clamp(0.7rem, 13.5cqw, 0.95rem);
+  font-weight: 500;
+  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
+  color: var(--blue);
+  white-space: normal;
+  cursor: pointer;
+}
+.char-card .rad-badge {
+  position: absolute;
+  bottom: 0.28rem;
+  left: 0.33rem;
+  font-size: 0.72rem;
+  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  color: #c2410c;
+  background: #fff3ea;
+  border: 1px solid #ffd9c2;
+  border-radius: 0.4rem;
+  padding: 0 0.35rem;
+  line-height: 1.5;
+  max-width: 2.6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.char-card .strokes {
+  position: absolute;
+  bottom: 0.33rem;
+  right: 0.45rem;
+  font-size: 0.61rem;
+  color: var(--muted);
+}
+.char-card .done-mark {
+  position: absolute;
+  top: 0.22rem;
+  right: 0.33rem;
+  width: 1.22rem;
+  height: 1.22rem;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.char-card.done { border-color: var(--green); }
+
+.char-card .type-tag,
+.detail-meta .type-tag {
+  background: #fff4d6;
+  color: #b0851a;
+  font-size: 0.61rem;
+  font-weight: 700;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.35rem;
+}
+.char-card .type-tag {
+  position: absolute;
+  top: 0.33rem;
+  right: 1.8rem;
+}
+
+/* 窄手機：字卡放寬為 2 欄（注音放得下、字更大更利閱讀） */
+@media (max-width: 419px) {
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 0.55rem; }
+}
+/* 中等手機：3 欄 */
+@media (min-width: 420px) and (max-width: 559px) {
+  .grid { grid-template-columns: repeat(3, 1fr); gap: 0.55rem; }
+}
+
+/* ── Detail overlay ──────────────────────── */
+.detail {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(60, 45, 20, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem;
+  padding: 0.9rem calc(0.9rem + env(safe-area-inset-right)) calc(0.9rem + env(safe-area-inset-bottom)) calc(0.9rem + env(safe-area-inset-left));
+}
+.detail[hidden] { display: none; }
+
+.detail-inner {
+  background: var(--card);
+  border-radius: 1.1rem;
+  box-shadow: 0 0.55rem 2.2rem rgba(0,0,0,.25);
+  width: 100%;
+  max-width: 640px;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.9rem 1rem 1.1rem;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.detail-word { display: flex; flex-direction: column; }
+.detail-char {
+  font-size: 3.3rem;
+  line-height: 1.1;
+  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+}
+.detail-zhuyin {
+  color: var(--blue);
+  font-size: 1.05rem;
+  margin-top: 0.22rem;
+  white-space: nowrap;
+  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
+  font-weight: 500;
+}
+.detail-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding-top: 0.45rem;
+  min-width: 0;
+}
+.detail-meta b { color: var(--ink); font-size: 0.83rem; }
+.detail-meta .meta-tag { color: var(--accent); }
+
+.icon-btn {
+  border: none;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.95rem;
+  width: var(--touch);
+  height: var(--touch);
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.icon-btn:active { transform: scale(.92); }
+
+/* ── 畫布區（左右課次箭頭）── */
+.canvas-zone {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.9rem auto 0.25rem;
+  max-width: 640px;
+}
+.canvas-stack {
+  position: relative;
+  width: min(88vw, 520px, calc(100dvh - 11.1rem));
+  margin: 0 auto;
+  min-width: 0;
+}
+.side-arrow {
+  width: var(--touch);
+  height: var(--touch);
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 1.45rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.side-arrow:active { transform: scale(.92); background: var(--accent-soft); }
+
+.writer-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 3px solid #e8a0a0;
+  border-radius: 0.55rem;
+  overflow: hidden;
+  touch-action: none;
+  background-color: #fffdf9;
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 1.5px), #f2c4c4 calc(50% - 1.5px), #f2c4c4 calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 1.5px), #f2c4c4 calc(50% - 1.5px), #f2c4c4 calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+    linear-gradient(to top right, transparent 49.8%, #f2c4c4 49.8%, #f2c4c4 50.2%, transparent 50.2%),
+    linear-gradient(to bottom left, transparent 49.8%, #f2c4c4 49.8%, #f2c4c4 50.2%, transparent 50.2%);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+}
+.writer-wrap.no-grid {
+  border-color: var(--line);
+  background-image: none;
+}
+.writer-box,
+.writer-box svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* 筆順編號疊層（習字本筆順號，不擋手寫） */
+.writer-box .stroke-num {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.writer-box .stroke-num text {
+  font-family: "Microsoft JhengHei", sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  fill: #d4380d;
+  opacity: .85;
+}
+.static-char {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-size: min(46vw, 180px);
+  color: rgba(60, 60, 60, 0.25);
+  padding: 1.35rem;
+  box-sizing: border-box;
+}
+.static-note {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 0.35rem;
+}
+
+.done-flag {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 2;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  display: none;
+  pointer-events: none;
+}
+.done-flag.show { display: block; }
+.writer-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 0.45rem;
+  transform: translateX(-50%);
+  z-index: 2;
+  max-width: 94%;
+  background: rgba(93, 71, 43, 0.88);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity .25s;
+  pointer-events: none;
+}
+.writer-hint.show { opacity: 1; }
+
+/* ── 按鈕列 ──────────────────────────────── */
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: center;
+  margin-top: 0.8rem;
+}
+.btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.89rem;
+  min-height: var(--touch);
+  padding: 0.55rem 1rem;
+  border-radius: 0.67rem;
+  cursor: pointer;
+}
+.btn:active { transform: scale(.96); }
+.btn-sm {
+  font-size: 1.2rem;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0.45rem 0;
+  border-radius: 50%;
+  line-height: 1;
+}
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.btn-ghost-btn[aria-pressed="true"] {
+  background: #edf2ff;
+  border-color: #4263eb;
+  color: #4263eb;
+  font-weight: 700;
+}
+
+/* ── 簡編本字典（預設折疊）── */
+.detail-dict {
+  margin-top: 0.9rem;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.55rem;
+}
+.detail-dict summary {
+  font-size: 0.78rem;
+  color: var(--muted);
+  cursor: pointer;
+  min-height: 2.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  list-style: none;
+}
+.detail-dict summary::-webkit-details-marker { display: none; }
+.detail-dict summary::before { content: "▸ "; }
+.detail-dict[open] summary::before { content: "▾ "; }
+.dict-body { margin-top: 0.55rem; font-size: 0.83rem; line-height: 1.7; }
+.dict-rad {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #fff7f2;
+  border: 1px solid #ffe3d3;
+  border-radius: 0.55rem;
+  padding: 0.4rem 0.55rem;
+  margin-bottom: 0.55rem;
+}
+.dict-rad-chip {
+  font-size: 1.35rem;
+  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  color: #c2410c;
+  background: #fff;
+  border: 1px solid #ffd9c2;
+  border-radius: 0.45rem;
+  padding: 0.05rem 0.55rem;
+  min-width: 2.45rem;
+  text-align: center;
+}
+.dict-rad-text { color: var(--ink); font-size: 0.78rem; }
+.dict-readings { display: flex; flex-direction: column; gap: 0.5rem; }
+.dict-reading-group {
+  background: #f8f5ff;
+  border: 1px solid #e5e0f7;
+  border-radius: 0.55rem;
+  padding: 0.4rem 0.6rem;
+}
+.dict-reading-group.is-book {
+  background: #fff6ef;
+  border-color: var(--accent);
+}
+.dict-reading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.dict-zy {
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
+  color: var(--blue);
+  white-space: nowrap;
+}
+.book-tag {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.61rem;
+  font-weight: 700;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.dict-exbtn {
+  border: none;
+  background: #eef1fe;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 0.45rem;
+  padding: 0.22rem 0.55rem;
+  cursor: pointer;
+}
+.dict-exbtn:active { background: #dde3fb; }
+.dict-defs { margin: 0.4rem 0 0; padding-left: 1.1rem; color: var(--ink); font-size: 0.82rem; }
+.dict-defs li { margin-bottom: 0.3rem; line-height: 1.55; }
+.dict-ex { color: var(--muted); font-size: 0.78rem; margin-left: 0.35rem; }
+.dict-none { color: var(--muted); }
+.meta-item {
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: #faf7f2;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+}
+
+/* ── 平板（≥720px）：放大字卡、柔化田字格線、放大詳細視窗字 ── */
+@media (min-width: 720px) {
+  .grid { grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: 0.78rem; }
+  .char-card .char { font-size: 2.9rem; }
+  .char-card .zhuyin { font-size: clamp(0.8rem, 13.5cqw, 1.05rem); }
+  .char-card .strokes { font-size: 0.67rem; }
+  .char-card {
+    background-image:
+      linear-gradient(to right, transparent calc(50% - 1px), #f8d4d4 calc(50% - 1px), #f8d4d4 calc(50% + 1px), transparent calc(50% + 1px)),
+      linear-gradient(to bottom, transparent calc(50% - 1px), #f8d4d4 calc(50% - 1px), #f8d4d4 calc(50% + 1px), transparent calc(50% + 1px)),
+      linear-gradient(to top right, transparent 49.7%, #f8d4d4 49.7%, #f8d4d4 50.3%, transparent 50.3%),
+      linear-gradient(to bottom left, transparent 49.7%, #f8d4d4 49.7%, #f8d4d4 50.3%, transparent 50.3%);
+  }
+  .detail { padding: 1.1rem; }
+  /* 全高直排：畫布吃掉剩餘高度、面板不捲動、字典可捲 */
+  .detail-inner {
+    max-width: 720px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .detail-head { flex-shrink: 0; }
+  .canvas-zone { flex: 1; min-height: 0; margin: 0.55rem auto; align-content: center; }
+  .canvas-stack { width: min(88vw, 560px, 100%); }
+  .detail-actions { flex-shrink: 0; }
+  .detail-dict { flex-shrink: 0; }
+  .dict-body { max-height: 26vh; overflow-y: auto; }
+  .detail-char { font-size: 4.1rem; }
+  .detail-zhuyin { font-size: 1.22rem; }
+}
+
+/* 橫式平板：欄數太多字卡過小，限制為 6 欄 */
+@media (min-width: 720px) and (max-width: 1100px) and (orientation: landscape) {
+  .grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* ── 手機（直式）：全螢幕寫字畫面 ────────── */
+@media (max-width: 719px) {
+  .detail { padding: 0; background: var(--card); }
+  .detail-inner {
+    max-width: none;
+    height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    padding: calc(0.55rem + env(safe-area-inset-top)) calc(0.67rem + env(safe-area-inset-right)) calc(0.55rem + env(safe-area-inset-bottom)) calc(0.67rem + env(safe-area-inset-left));
+  }
+  .detail-head { flex-shrink: 0; }
+  .detail-head #btnBack { display: none; }
+  .detail-word { flex: 0 1 auto; min-width: 0; }
+  .detail-meta { order: 3; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; padding-top: 0.22rem; gap: 0.22rem; align-items: center; font-size: 0.67rem; }
+  .detail-char { font-size: 2.45rem; }
+  .meta-item { font-size: 0.67rem; padding: 0.1rem 0.4rem; white-space: normal; }
+
+  .canvas-zone {
+    margin: 0.45rem 0 0;
+    flex: 1;
+    align-content: center;
+    min-height: 0;
+    gap: 0.35rem;
+  }
+  .canvas-stack { width: 100%; max-width: min(60vh, 460px); }
+  .side-arrow { width: 2.2rem; height: 2.2rem; font-size: 1.22rem; }
+
+  .detail-actions { flex-shrink: 0; gap: 0.45rem; }
+  .detail-actions .btn { flex: 1; min-width: 5.3rem; padding: 0.55rem 0.35rem; font-size: 0.83rem; }
+
+  .detail-dict { flex-shrink: 0; }
+  .dict-body { max-height: 52vh; overflow-y: auto; }
+}
+
+/* ── 矮畫面（橫式手機/平板）：縮小字與畫布 ──── */
+@media (max-height: 500px) {
+  .detail-inner {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+  }
+  .detail-head { align-items: center; gap: 0.45rem; flex-shrink: 0; }
+  .detail-char { font-size: 1.9rem; }
+  .detail-zhuyin { font-size: 0.83rem; margin-top: 0; }
+  .detail-meta { padding-top: 0; }
+  .canvas-zone { flex-shrink: 0; }
+  .canvas-stack { width: min(44vh, 36vw, 320px); }
+  .detail-actions { flex-shrink: 0; gap: 0.35rem; }
+  .detail-actions .btn { flex: 1; min-width: 0; min-height: 2rem; padding: 0.33rem 0.25rem; font-size: 0.72rem; }
+  .detail-dict { flex-shrink: 0; }
+  .detail-dict summary { min-height: 1.9rem; }
+  .dict-body { max-height: 40vh; }
+}
+
+/* ── 進入引導（大圖卡選課）── */
+.setup {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--bg);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(1.1rem + env(safe-area-inset-top)) 0.9rem calc(1.55rem + env(safe-area-inset-bottom));
+}
+.setup[hidden] { display: none; }
+.setup-inner { max-width: 760px; margin: 0 auto; }
+.setup-head { text-align: center; margin-bottom: 1rem; }
+.setup-title {
+  display: block;
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin-bottom: 0.45rem;
+}
+.setup-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+.setup-step { margin-bottom: 0.78rem; }
+.setup-step-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-bottom: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.35rem;
+}
+.setup-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.1rem, 1fr));
+  gap: 0.55rem;
+}
+.setup-card {
+  min-height: 4rem;
+  padding: 0.67rem 0.8rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-family: inherit;
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform .12s, border-color .12s, background .12s;
+}
+.setup-card:active { transform: scale(.97); }
+.setup-card.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+.setup-card-course { min-height: 4.45rem; font-size: 1.05rem; }
+.setup-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 1.2rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--line);
+}
+.setup-summary { color: var(--muted); font-size: 0.83rem; flex: 1 1 11rem; }
+.setup-foot .btn { font-size: 1rem; padding: 0.67rem 1.45rem; }
+.btn-choose { font-size: 0.78rem; padding: 0.35rem 0.65rem; min-height: 2.1rem; }
+@media (max-width: 480px) {
+  .setup-cards { grid-template-columns: repeat(auto-fill, minmax(5.3rem, 1fr)); }
+  .setup-card { min-height: 3.3rem; font-size: 0.83rem; padding: 0.45rem; }
+  .setup-card-course { min-height: 3.7rem; font-size: 0.89rem; }
+}
+/* ── 習字本／學習手冊（列印用）──────────────
+ * 螢幕：.sheet 全螢幕浮層，A4 預覽等比縮放；
+ * 列印：@media print 只印 .sheet-page（A4、每課一頁）。 */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #d8d2c8;
+  display: flex;
+  flex-direction: column;
+}
+.sheet[hidden] { display: none; }
+.sheet-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  align-items: center;
+  padding: 0.5rem 0.9rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.sheet-title { font-weight: 700; font-size: 1rem; }
+.sheet-opt {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sheet-opt input { width: 1.05rem; height: 1.05rem; }
+.sheet-count { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+.sheet-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+}
+/* A4 頁：寬＝容器可用寬（min(190mm, 100%)），永不超出視口；
+ * 高＝撐滿 scroll 容器（flex-grow），行距由 .ch-row 均分、不留大片白帶。 */
+.sheet-page {
+  width: min(190mm, 100%);
+  flex: 1 0 auto;
+  min-height: 200mm;
+  background: #fff;
+  box-shadow: 0 2px 14px rgba(60, 45, 20, .25);
+  display: flex;
+  flex-direction: column;
+  padding: 7mm 7mm 6mm;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.sheet-hd {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  border-bottom: 1.5px solid var(--ink);
+  padding-bottom: 0.5mm;
+  margin-bottom: 2mm;
+  font-size: 7.5pt;
+  flex-shrink: 0;
+}
+.sheet-hd .hd-title { font-size: 11pt; font-weight: 700; }
+.sheet-hd .hd-line { flex: 1; border-bottom: 1px dotted var(--muted); }
+.sheet-hd .hd-label { color: var(--muted); }
+/* 頁碼（CSS counter，跨課連續＝習字本頁碼） */
+.sheet-scroll { counter-reset: pg; }
+.sheet-page { counter-increment: pg; }
+.sheet-hd::after {
+  content: "第 " counter(pg) " 頁";
+  color: var(--muted);
+  font-size: 6.8pt;
+  white-space: nowrap;
+}
+/* 一字一組：六格（全寬）在上，學習手冊註解整行在下；
+ * 行距均分剩餘頁高（flex-grow），不留大片白帶 */
+.ch-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6mm;
+  flex: 1 0 auto;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.ch-cells {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.2mm;
+}
+.cell {
+  position: relative;
+  border: 0.35mm solid var(--ink);
+  overflow: hidden;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+}
+/* 田字格淡紅十字（範字格與空格） */
+.cell-ref, .cell-blank {
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.25mm), #e8b4b4 calc(50% - 0.25mm), #e8b4b4 calc(50% + 0.25mm), transparent calc(50% + 0.25mm)),
+    linear-gradient(to bottom, transparent calc(50% - 0.25mm), #e8b4b4 calc(50% - 0.25mm), #e8b4b4 calc(50% + 0.25mm), transparent calc(50% + 0.25mm));
+}
+.cell svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* 範字／描紅：SVG 文字隨格等比 */
+.cell-glyph {
+  font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "KaiTi", serif;
+  font-size: 640px;
+}
+.cell-ref .cell-glyph { fill: var(--ink); }
+.cell-trace .cell-glyph { fill: rgba(60, 60, 60, .30); }
+/* 筆順號：viewBox 絕對字號（隨格等比）、白暈圈讓紅字在筆畫上可讀 */
+.cell-stroke svg text {
+  font-family: "Microsoft JhengHei", sans-serif;
+  font-size: 92px;
+  font-weight: 700;
+  fill: #d4380d;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 16px;
+}
+.cell-stroke svg path {
+  fill: rgba(212, 56, 13, .40);
+  stroke: none;
+}
+/* 學習手冊註解：整行、單行收斂（釋義截斷），行高由六格主導、不再出現白帶 */
+.ch-info {
+  font-size: 6.6pt;
+  line-height: 1.3;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch-info .i-zy { font-size: 8pt; color: var(--blue); font-weight: 700; }
+.ch-info .i-meta { font-size: 6.8pt; color: var(--muted); }
+.ch-info .i-ex { color: var(--accent); }
+@media print {
+  @page { size: A4; margin: 10mm 9mm; }
+  body * { visibility: hidden; }
+  .sheet, .sheet * { visibility: visible; }
+  .sheet { position: absolute; inset: 0; background: #fff; display: block; }
+  .sheet-bar, .no-print { display: none !important; }
+  .sheet-scroll { overflow: visible; padding: 0; background: #fff; display: block; }
+  .sheet-page {
+    /* 寬＝@page 可印區（A4 210mm − 左右 18mm）；高＝撐滿 A4（277mm） */
+    width: 100%;
+    min-height: 277mm;
+    flex: none;
+    box-shadow: none;
+    margin: 0 auto;
+    page-break-after: always;
+    padding: 6mm 5mm 5mm;
+  }
+  .sheet-page:last-child { page-break-after: auto; }
+}

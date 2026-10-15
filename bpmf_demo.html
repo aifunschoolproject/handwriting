@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="style.css?v=9">
+<style>
+  body { max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 24px; text-align: center; margin: 10px 0 6px; }
+  .sub { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+  .modes { display: flex; justify-content: center; gap: 10px; margin-bottom: 22px; }
+  .mode-btn {
+    padding: 10px 26px; font-size: 16px; font-weight: bold; font-family: inherit;
+    border: none; border-radius: 30px; background: #f0ece4; color: #666; cursor: pointer;
+  }
+  .mode-btn.active { background: var(--accent); color: #fff; }
+  .demo-card {
+    background: #fff; border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 22px 26px; margin-bottom: 18px;
+  }
+  .demo-card h2 { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  .demo-line { line-height: 2.4; }
+  .fs-22 { font-size: 22px; font-weight: 600; }
+  .fs-34 { font-size: 34px; font-weight: 700; }
+  .note { color: var(--muted); font-size: 13px; line-height: 1.8; }
+  .note code { background: #f4efe6; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>旁式注音示範</h1>
+<p class="sub">同一句文字，兩種排法；旁式注音用直排小字標在字的右側，調號獨立對齊</p>
+
+<div class="modes">
+  <button class="mode-btn active" data-mode="side">旁式注音</button>
+  <button class="mode-btn" data-mode="top">上式注音（現行）</button>
+</div>
+
+<div class="demo-card">
+  <h2>22px（課文大小）</h2>
+  <div class="demo-line fs-22" data-text="主角為什麼悶悶不樂？"></div>
+  <div class="demo-line fs-22" data-text="雖然我沒有養過寵物，但聽到小美說小狗生病了，我也跟著難過起來。"></div>
+  <div class="demo-line fs-22" data-text="老師說：「考試前不要太緊張，放輕鬆就好。」"></div>
+</div>
+
+<div class="demo-card">
+  <h2>34px（評量題大小）</h2>
+  <div class="demo-line fs-34" data-text="一顆黑點，可以變成小蜜蜂。"></div>
+  <div class="demo-line fs-34" data-text="主角為什麼悶悶不樂？"></div>
+</div>
+
+<div class="demo-card note">
+  <h2>技術說明</h2>
+  每個字包成 <code>&lt;span class="z-word"&gt;</code>（inline-flex）；注音符號縮成 <code>0.45em</code>
+  的<b>直排</b>放在字右側（<code>.z-ruby &gt; .z-bopo</code>），調號 <code>ˊ ˇ ˋ ˙</code> 拆出來
+  用 <code>.z-tone</code> 跟符號列底部對齊。注音來源：本機 <code>dict.js</code>（教育部簡編本），
+  離線可用，跟 app 的注音是同一套。換排法只需把渲染函數從 <code>bpmfSide()</code> 換成
+  <code>bpmf()</code>。
+</div>
+
+<script src="dict.js?v=4"></script>
+<script src="bpmf.js?v=3"></script>
+<script>
+'use strict';
+const LINES = [...document.querySelectorAll('.demo-line')];
+function render(mode) {
+  for (const el of LINES) el.innerHTML = mode === 'side' ? bpmfSide(el.dataset.text) : bpmfTop(el.dataset.text);
+}
+document.querySelectorAll('.mode-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    render(b.dataset.mode);
+  });
+});
+render('side');
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>手寫練習</title>
+<link rel="stylesheet" href="style.css?v=15">
+</head>
+<body>
+<header class="topbar">
+  <h1>✍️ 手寫練習</h1>
+  <div class="filters">
+    <label class="filter">
+      <span>版本</span>
+      <select id="selVersion"></select>
+    </label>
+    <label class="filter">
+      <span>年級</span>
+      <select id="selGrade"></select>
+    </label>
+    <label class="filter">
+      <span>學期</span>
+      <select id="selSemester">
+        <option value="1">上學期</option>
+        <option value="2">下學期</option>
+      </select>
+    </label>
+    <label class="filter">
+      <span>課次</span>
+      <select id="selClass"></select>
+    </label>
+  </div>
+  <div class="fs-ctl" id="fsCtl" role="group" aria-label="介面字號大小">
+    <span class="fs-ctl-label">字號</span>
+    <button type="button" data-fs="18">標準</button>
+    <button type="button" data-fs="20">大</button>
+    <button type="button" data-fs="22">特大</button>
+  </div>
+  <div class="progress-pill" id="progressPill" title="本課已練習字數">0/0</div>
+  <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
+  <button class="btn btn-accent btn-choose" id="btnSheet">📄 習字本</button>
+</header>
+
+<!-- 習字本／學習手冊（列印用） -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-bar no-print">
+    <label class="sheet-opt"><input type="checkbox" id="sheetGrade" checked> <span class="lbl">整學期</span></label>
+    <label class="sheet-opt"><input type="checkbox" id="sheetStrokeNo" checked> <span class="lbl">筆順號</span></label>
+    <label class="sheet-opt"><input type="checkbox" id="sheetPinyin" checked> <span class="lbl">注音</span></label>
+    <label class="sheet-opt"><input type="checkbox" id="sheetDict" checked> <span class="lbl">釋義例詞</span></label>
+    <label class="sheet-opt"><input type="checkbox" id="sheetTrace" checked> <span class="lbl">描紅格</span></label>
+    <span class="sheet-count" id="sheetCount"></span>
+    <button class="btn btn-ghost-btn" id="btnSheetClose">✕ 關閉</button>
+    <button class="btn btn-accent" id="btnSheetPrint">🖨 列印／存 PDF</button>
+  </div>
+  <div class="sheet-scroll" id="sheetScroll"></div>
+</div>
+
+<!-- 進入引導：大圖卡選 版本／年級／學期／課次，點課卡即練 -->
+<div class="setup" id="setup">
+  <div class="setup-inner">
+    <div class="setup-head">
+      <span class="setup-title">✍️ 手寫練習</span>
+      <span class="setup-sub">先選好 版本、年級、學期、課次，就能練習</span>
+    </div>
+    <div class="setup-steps" id="setupSteps"></div>
+    <div class="setup-foot">
+      <span class="setup-summary" id="setupSummary"></span>
+      <button class="btn btn-accent" id="btnStart">▶ 開始練習</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <p class="class-note" id="classNote"></p>
+  <section class="grid" id="charGrid"></section>
+</main>
+
+<!-- 寫字詳細視窗 -->
+<div class="detail" id="detail" hidden>
+  <div class="detail-inner">
+    <div class="detail-head">
+      <button class="btn btn-sm" id="btnBack" title="回字卡">‹</button>
+      <div class="detail-word">
+        <div class="detail-char" id="dChar">字</div>
+        <div class="detail-zhuyin" id="dZhuYin"></div>
+      </div>
+      <div class="detail-meta" id="dMeta"></div>
+      <button class="icon-btn" id="btnClose" title="關閉">✕</button>
+    </div>
+
+    <div class="canvas-zone">
+      <button class="side-arrow" id="btnPrev" title="上一課">‹</button>
+      <div class="canvas-stack">
+        <div class="writer-wrap" id="writerWrap">
+          <div class="writer-box" id="writerBox"></div>
+        </div>
+        <div class="done-flag" id="doneFlag">✔ 已練習</div>
+        <div class="writer-hint" id="writerHint"></div>
+      </div>
+      <button class="side-arrow" id="btnNext" title="下一課">›</button>
+    </div>
+
+    <div class="detail-actions">
+      <button class="btn" id="btnAnimate">▶ 筆順動畫</button>
+      <button class="btn btn-accent" id="btnQuiz">✍️ 逐筆練習</button>
+      <button class="btn" id="btnClear">🧽 重來</button>
+      <button class="btn" id="btnSpeak">🔊 唸字</button>
+      <button class="btn btn-ghost-btn" id="btnGhost" aria-pressed="true">👁 虛影</button>
+      <button class="btn btn-ghost-btn" id="btnGrid" aria-pressed="true">▦ 格線：開</button>
+    </div>
+
+    <details class="detail-dict" id="dictBox">
+      <summary>📖 教育部《國語辭典》</summary>
+      <div class="dict-body" id="dictBody"></div>
+    </details>
+  </div>
+</div>
+
+<script src="hanzi-writer.min.js?v=1"></script>
+<script src="data.js?v=1"></script>
+<script src="dict.js?v=5"></script>
+<script src="bpmf.js?v=5"></script>
+<script src="app.js?v=15"></script>
+</html>
