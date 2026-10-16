@@ -574,6 +574,230 @@ function closeSheet() {
   document.body.style.overflow = '';
 }
 
+/* ── 習字本 PDF 下載（jsPDF + canvas 自繪 A4 版面）──
+ * 嵌入式 WebView 的 window.print() 常無支援、系統預覽頁裁切也不可靠；
+ * 改由 canvas 直接繪製每一頁 A4（版型與螢幕 .sheet-page 相同），jsPDF 輸出真實
+ * PDF 檔（字型嵌入、任何裝置開啟一致）並下載。
+ * 尺寸：mm → px 固定 4（1mm＝4px），1191×1684px＝A4。 */
+function sheetOpts() {
+  return { stroke: $('sheetStroke').checked, trace: $('sheetTrace').checked,
+           dict: $('sheetDict').checked, pinyin: $('sheetPinyin').checked };
+}
+
+// 筆順 path 解析（hanzi-writer 格式：y 向上、資料框 1024、M/L/Q/C/Z 指令）；
+// 轉成 0..1000 格內座標（y 向下），回每筆畫的段序列 [ ['M',x,y], ['L',..], ['Q',..], ['C',..] ]。
+function strokePaths(name) {
+  const d = window.HANZI_DATA && window.HANZI_DATA[name];
+  if (!d || !d.strokes) return null;
+  const s = 1000 / 1024, fy = 900 * s;
+  const X = (v) => v * s, Y = (v) => fy - v * s;
+  const out = [];
+  const re = /([MLQC])([^MLQC]*)/g;
+  for (const str of d.strokes) {
+    const stroke = [];
+    let m;
+    while ((m = re.exec(str))) {
+      const op = m[1];
+      const n = m[2].trim().split(/[\s,]+/).map(parseFloat);
+      if (op === 'M') { stroke.push(['M', X(n[0]), Y(n[1])]); }
+      else if (op === 'L') { stroke.push(['L', X(n[0]), Y(n[1])]); }
+      else if (op === 'Q') { stroke.push(['Q', X(n[0]), Y(n[1]), X(n[2]), Y(n[3])]); }
+      else if (op === 'C') { stroke.push(['C', X(n[0]), Y(n[1]), X(n[2]), Y(n[3]), X(n[4]), Y(n[5])]); }
+    }
+    if (stroke.length) out.push(stroke);
+  }
+  return out.length ? out : null;
+}
+
+function truncPx(ctx, text, max) {
+  if (ctx.measureText(text).width <= max) return text;
+  let t = text;
+  while (t.length && ctx.measureText(t + '…').width > max) t = t.slice(0, -1);
+  return t + '…';
+}
+
+// 繪一頁 A4 到 canvas（g：course 資料＋該頁字元）。版面＝螢幕 .sheet-page 的鏡像。
+function drawSheetPage(cv, g) {
+  const ctx = cv.getContext('2d');
+  const W = 1191, H = 1684;                 // A4 @4px/mm
+  const px = (mm) => mm * 4;
+  const padT = px(4), padL = px(3), padB = px(4), padR = px(3);
+  const cw = W - padL - padR;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+  const ink = '#33302c', muted = '#8a8378', blue = '#4263eb', accent = '#e8590c';
+  const F = (sz, fam, w) => `${w || 400} ${sz}px ${fam || '"TW-Kai","BiauKai","Kaiti TC",serif'}`;
+  // 表頭（hd-title 11pt≈57px）＋頁碼
+  let x = padL;
+  ctx.fillStyle = ink; ctx.font = F(57, null, 700); ctx.textBaseline = 'alphabetic';
+  ctx.fillText(g.title, x, padT + 57); x += ctx.measureText(g.title).width + px(2.4);
+  ctx.font = F(31, null, 400); ctx.fillStyle = muted;
+  const label = '姓名：';
+  ctx.fillText(label, x + px(12), padT + 45);
+  const lw = ctx.measureText(label).width;
+  const lineY = padT + 50, lineEnd = W - padR - px(16) - px(30) - px(11);
+  ctx.strokeStyle = '#c9c2b4'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(x + px(2.4), lineY); ctx.lineTo(lineEnd, lineY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + lw + px(12), lineY); ctx.lineTo(W - padR - px(16) - px(18), lineY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = muted; ctx.font = F(34, null, 400);
+  ctx.textAlign = 'right';
+  ctx.fillText(`第 ${g.pg} 頁`, W - padR, padT + 45);
+  ctx.textAlign = 'left';
+  const ruleY = padT + px(2.4) + 57 + px(1);
+  ctx.strokeStyle = ink; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(padL, ruleY); ctx.lineTo(W - padR, ruleY); ctx.stroke();
+  // 8 列
+  const top = ruleY + px(2), bottom = H - padB;
+  const gapRows = px(0.6) * 8;
+  const infoH = g.dict ? 44 : 0;
+  const gapInfo = g.dict ? px(0.6) * 8 : 0;
+  const cell = Math.min(cw, Math.floor((bottom - top - gapRows - infoH * 8 - gapInfo) / 8));
+  let y = top;
+  const opts = g.opts;
+  for (const ch of g.chars) {
+    // 六格
+    const gap = px(1.2);
+    const total = cell * 6 + gap * 5;
+    const ox = padL + Math.floor((cw - total) / 2);
+    for (let i = 0; i < 6; i++) {
+      const cx0 = ox + i * (cell + gap);
+      if (i === 0 || i === 2) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(cx0, y, cell, cell);
+        ctx.strokeStyle = '#e8b4b4'; ctx.lineWidth = 2;
+        const mid = cell / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx0 + mid, y); ctx.lineTo(cx0 + mid, y + cell);
+        ctx.moveTo(cx0, y + mid); ctx.lineTo(cx0 + cell, y + mid);
+        ctx.stroke();
+        ctx.strokeStyle = ink; ctx.lineWidth = 2.5;
+        ctx.strokeRect(cx0 + 1.25, y + 1.25, cell - 2.5, cell - 2.5);
+        if (i === 0) {
+          ctx.fillStyle = ink; ctx.font = F(cell * 0.95);
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(ch.name, cx0 + cell / 2, y + cell / 2 + cell * 0.04);
+          ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        } else if (opts.stroke) {
+          const paths = strokePaths(ch.name);
+          if (paths) {
+            ctx.save();
+            ctx.translate(cx0, y);
+            ctx.scale(cell / 1000, cell / 1000);
+            ctx.strokeStyle = 'rgba(212,56,13,.40)';
+            ctx.lineWidth = 30;
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath();
+            for (const stroke of paths) {
+              for (const seg of stroke) {
+                if (seg[0] === 'M') ctx.moveTo(seg[1], seg[2]);
+                else if (seg[0] === 'L') ctx.lineTo(seg[1], seg[2]);
+                else if (seg[0] === 'Q') ctx.quadraticCurveTo(seg[1], seg[2], seg[3], seg[4]);
+                else ctx.bezierCurveTo(seg[1], seg[2], seg[3], seg[4], seg[5], seg[6]);
+              }
+            }
+            ctx.stroke();
+            ctx.restore();
+          }
+        } else if (i === 2 && opts.trace) {
+          ctx.fillStyle = 'rgba(60,60,60,.30)'; ctx.font = F(cell * 0.95);
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(ch.name, cx0 + cell / 2, y + cell / 2 + cell * 0.04);
+          ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        }
+      } else {
+        ctx.strokeStyle = ink; ctx.lineWidth = 2.5;
+        ctx.strokeRect(cx0 + 1.25, y + 1.25, cell - 2.5, cell - 2.5);
+      }
+    }
+    y += cell + px(0.6);
+    if (opts.dict) {
+      const d = DICT[ch.name];
+      const reading = g.readings && g.readings[ch.name];
+      ctx.fillStyle = blue; ctx.font = F(42, '"BpmfGenSenRounded","TW-Kai",serif', 700);
+      let ix = ox;
+      if (opts.pinyin) { ctx.fillText(ch.zhuYin, ix, y + 40); ix += ctx.measureText(ch.zhuYin).width + 18; }
+      ctx.fillStyle = muted; ctx.font = F(33);
+      const meta = `${d && d.strokes ? d.strokes : ch.fullStroke} 筆` +
+        (d && d.radForm ? `・部首 ${d.radForm}` : '') +
+        (ch.type === '認讀字' ? '・認讀字' : '') + '　';
+      ctx.fillText(meta, ix, y + 40); ix += ctx.measureText(meta).width;
+      if (reading) {
+        const def = reading.defs && reading.defs[0] && reading.defs[0].d;
+        const ex = reading.ex ? `例：${reading.ex.split('、')[0]}` : '';
+        const maxDef = W - padR - ix - (ex ? 40 + 33 : 0) - 10;
+        if (def) { ctx.fillStyle = ink; ctx.font = F(33); ctx.fillText(truncPx(ctx, def, maxDef), ix, y + 40); ix += ctx.measureText(def).width + 12; }
+        if (ex) { ctx.fillStyle = accent; ctx.font = F(33); ctx.fillText(ex, ix, y + 40); }
+      }
+      y += 44 + px(0.6);
+    }
+  }
+}
+
+let sheetPdfBusy = false;
+async function sheetPdf() {
+  if (sheetPdfBusy) return;
+  const courses = sheetCourses();
+  if (!courses.length) { alert('（此課沒有生字）'); return; }
+  sheetPdfBusy = true;
+  const btn = $('btnSheetPrint');
+  btn.disabled = true; btn.textContent = '⏳ 產生中…';
+  try {
+    const opts = sheetOpts();
+    // 字型先載入再繪（canvas 用已載入字型；PDF 內 jsPDF 再嵌入子集）
+    try {
+      await Promise.all([
+        document.fonts.load('700 57px "TW-Kai"'), document.fonts.load('400 33px "TW-Kai"'),
+        document.fonts.load('700 42px "BpmfGenSenRounded"'),
+      ]);
+    } catch {}
+    // 筆順資料（缺字先補抓）
+    const names = [];
+    for (const c of courses) for (const ch of c.chars) names.push(ch.name);
+    await loadHanziData();
+    const miss = names.filter((n) => !(window.HANZI_DATA && window.HANZI_DATA[n]));
+    if (opts.stroke && miss.length) await Promise.all(miss.map((n) => new Promise((res) =>
+      charDataLoader(n, res, res))));
+    // 每字一頁內註解資料
+    const readings = {};
+    for (const c of courses) for (const ch of c.chars) {
+      const d = DICT[ch.name];
+      readings[ch.name] = bookZyHit(d, ch.zhuYin) || (d && d.readings && d.readings[0]);
+    }
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    const cv = document.createElement('canvas');
+    cv.width = 1191; cv.height = 1684;
+    let pg = 0, first = true;
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    for (const c of courses) {
+      const rows = c.chars.slice();
+      for (let i = 0; i < rows.length; i += SHEET_PAGE_CHARS) {
+        pg++;
+        drawSheetPage(cv, { title: c.title, pg, chars: rows.slice(i, i + SHEET_PAGE_CHARS), opts, readings });
+        if (!first) pdf.addPage();
+        first = false;
+        pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+        btn.textContent = `⏳ ${pg} 頁…`;
+        await tick(); // 每頁讓出主線程,長學期不凍結畫面
+      }
+    }
+    const semName = { '1': '上', '2': '下' }[state.semester] || '';
+    const fname = `習字本_${VERSION_LABELS[state.version] || state.version}_${state.grade}年${semName}${pg}頁.pdf`;
+    pdf.save(fname);
+    btn.textContent = '✅ 已下載';
+  } catch (err) {
+    console.error('PDF 產生失敗', err);
+    alert('PDF 產生失敗：' + err.message);
+    btn.textContent = '⬇ 下載 PDF';
+  } finally {
+    sheetPdfBusy = false;
+    btn.disabled = false;
+    setTimeout(() => { if (!sheetPdfBusy) btn.textContent = '⬇ 下載 PDF'; }, 1500);
+  }
+}
+
 
 function stepCourse(delta) {
   const ver = DATA[state.version];
@@ -667,7 +891,7 @@ function bind() {
   // 習字本／學習手冊
   $('btnSheet').addEventListener('click', openSheet);
   $('btnSheetClose').addEventListener('click', closeSheet);
-  $('btnSheetPrint').addEventListener('click', () => window.print());
+  $('btnSheetPrint').addEventListener('click', () => sheetPdf());
   for (const id of ['sheetGrade', 'sheetStroke', 'sheetPinyin', 'sheetDict', 'sheetTrace']) {
     $(id).addEventListener('change', renderSheet);
   }
@@ -790,8 +1014,8 @@ function initSetup() {
   showSetup();
 }
 
-/* ── 字號（整介面等比放大）：root font-size 由 --fs 驅動，標準18/大20/特大22，自動記憶 ── */
-const FS_LEVELS = [18, 20, 22];
+/* ── 字號（整介面等比放大）：root font-size 由 --fs 驅動，特大22(基準)/超大44，自動記憶 ── */
+const FS_LEVELS = [22, 44];
 function setFs(px) {
   if (!FS_LEVELS.includes(px)) return;
   state.fs = px;
@@ -803,7 +1027,7 @@ function setFs(px) {
 }
 function loadFs() {
   const saved = Number(localStorage.getItem('hw_fs'));
-  setFs(FS_LEVELS.includes(saved) ? saved : 18);
+  setFs(FS_LEVELS.includes(saved) ? saved : 22);
 }
 
 /* ── 啟動 ── */

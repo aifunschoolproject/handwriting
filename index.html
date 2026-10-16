@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 <header class="topbar">
@@ -33,9 +33,8 @@
   </div>
   <div class="fs-ctl" id="fsCtl" role="group" aria-label="介面字號大小">
     <span class="fs-ctl-label">字號</span>
-    <button type="button" data-fs="18">標準</button>
-    <button type="button" data-fs="20">大</button>
     <button type="button" data-fs="22">特大</button>
+    <button type="button" data-fs="44">超大</button>
   </div>
   <div class="progress-pill" id="progressPill" title="本課已練習字數">0/0</div>
   <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
@@ -52,7 +51,7 @@
     <label class="sheet-opt"><input type="checkbox" id="sheetTrace" checked> <span class="lbl">描紅格</span></label>
     <span class="sheet-count" id="sheetCount"></span>
     <button class="btn btn-ghost-btn" id="btnSheetClose">✕ 關閉</button>
-    <button class="btn btn-accent" id="btnSheetPrint">🖨 列印／存 PDF</button>
+    <button class="btn btn-accent" id="btnSheetPrint">⬇ 下載 PDF</button>
   </div>
   <div class="sheet-scroll" id="sheetScroll"></div>
 </div>
@@ -123,6 +122,6 @@
 <script src="hanzi-writer.min.js?v=1"></script>
 <script src="data.js?v=1"></script>
 <script src="dict.js?v=5"></script>
+<script src="jspdf.umd.min.js?v=1"></script>
 <script src="bpmf.js?v=5"></script>
-<script src="app.js?v=19"></script>
-</html>
+<script src="app.js?v=22"></script>

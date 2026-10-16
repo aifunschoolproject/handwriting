@@ -1,6 +1,6 @@
 /* ── 手寫練習 ────────────────────────────────────────────
- * 兒童視力友善：所有文字／間距以 rem 表記、根字級由 --fs 驅動
- * （標準 18px／大 20px／特大 22px，頂欄「字號」可切、自動記憶），
+ * 兒童視力友善:所有文字/間距以 rem 表記、根字級由 --fs 驅動
+ * (特大 22px 為基準/超大 44px,頂欄「字號」可切、自動記憶),
  * 整個介面隨之等比放大；版面幾何（字卡網格、寫字格）仍隨視窗自適應。
  * 注音字型參考 afs-apsa：自載源泉注音圓體，確保平板呈現一致。
  * ─────────────────────────────────────────────────────── */
@@ -22,8 +22,8 @@
      758px 高）11vh 只有 83px，按鈕會壓到內容。橫式平板各頁面內容一律不進入此帶。 */
   --app-zone-h: max(11vh, 94px);
 }
-/* 根字級＝介面總放大倍率（由 app.js 依 .fs-18/.fs-20/.fs-22 設定；預設標準 18px） */
-html { font-size: var(--fs, 18px); }
+/* 根字級＝介面總放大倍率（由 app.js 設定 --fs；預設特大 22px） */
+html { font-size: var(--fs, 22px); }
 
 /* ── 字型（自載子集，確保各裝置一致）──
    漢字：全字庫正楷體 TW-Kai（CNS11643，OFL-1.1）子集——正楷字形、各裝置一致；
@@ -101,7 +101,7 @@ button, select { touch-action: manipulation; }
 }
 .filter select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* 字號控制（標準／大／特大）：整介面等比放大、自動記憶 */
+/* 字號控制（特大 22px 基準／超大 44px）：整介面等比放大、自動記憶 */
 .fs-ctl {
   display: inline-flex;
   align-items: center;
@@ -1021,17 +1021,22 @@ main {
     top: 0; left: 0; bottom: 0;
     width: var(--side-w);
     z-index: 90;
+    display: flex;
     flex-direction: column;
     align-items: stretch;
     flex-wrap: nowrap;
     gap: 0.75rem;
+    /* 超大字號(44px)時內容高超過視口：只有中間篩選區捲動,
+       底部「選課/習字本」主按鈕恒貼底、不受字號影響 */
+    overflow: clip;
     padding: calc(0.95rem + env(safe-area-inset-top)) 0.85rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
     border-bottom: none;
     border-right: 1px solid var(--line);
   }
   .topbar h1 { font-size: 1.15rem; font-weight: 800; }
-  .topbar .filters { flex-direction: column; flex: none; gap: 0.5rem; order: 0; }
+  .topbar .filters { flex-direction: row; flex-wrap: wrap; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: clip; overscroll-behavior: contain; gap: 0.5rem; order: 0; display: grid; grid-template-columns: 1fr 1fr; align-content: start; padding-right: 0.2rem; }
   .topbar .filter { flex: none; }
+  .topbar .fs-ctl, .topbar .progress-pill { flex-shrink: 0; }
   .topbar .progress-pill { margin-left: 0; width: max-content; }
   .topbar .btn-choose {
     width: 100%; min-height: 2.8rem;
@@ -1076,24 +1081,26 @@ main {
   .setup-summary { flex: none; }
   .setup-foot .btn { font-size: 1.2rem; padding: 0.95rem 1.2rem; min-height: 3.6rem; border-radius: 0.8rem; font-weight: 700; }
 
-  /* 習字本：右移側欄；橫式一列並排兩頁 A4（維持 210:297 比例），充分利用寬螢幕 */
-  .sheet { left: var(--side-w); }
+  /* 習字本：右移側欄；橫式一列並排兩頁 A4（維持 190:266 比例），充分利用寬螢幕。
+     用 flex-wrap（不用 grid）：grid 的 auto 列對 aspect-ratio 子項量高時寬度未定、
+     行軌道崩縮到最小內容高，多頁時頁與頁重疊；flex 先定寬再由比例定高，行行堆疊 */
   .sheet-scroll {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-content: start;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    justify-content: center;
     gap: 1rem;
     padding: 1rem 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
   }
   /* 一列兩頁並排，各頁維持 A4 比例(190/266)；
-     寬度＝min(欄寬, 可用高×比例)，可用高＝視口高－工具列(≈3.6rem)－上下padding(≈2rem)－底部保留帶
-     → 頁面高度天然受限、整頁不與左下角按鈕重疊；置中於欄中 */
+     寬度＝min(半欄, 可用高×比例)，可用高＝視口高－工具列(≈3.6rem)－上下padding(≈2rem)－底部保留帶
+     → 頁面高度天然受限、整頁不與左下角按鈕重疊 */
   .sheet-page {
-    width: min(100%, calc((100dvh - var(--app-zone-h) - 5.6rem) * 190 / 266));
+    width: min(calc((100% - 1rem) / 2), calc((100dvh - var(--app-zone-h) - 5.6rem) * 190 / 266));
     flex: none;
     min-height: 0;
     aspect-ratio: 190 / 266;
-    justify-self: center;
   }
   /* 一頁 8 字在矮橫式視口（如遊戲視窗 ≈758px 高）放不下全寬格子：
      表頭/內距/註解為固定 mm・pt、不隨頁縮，每列＝格子＋列距＋註解。
@@ -1122,6 +1129,7 @@ main {
   .sheet-page {
     width: 100%;
     min-height: 0;
+    aspect-ratio: 210 / 297;
     box-shadow: none;
     margin: 0;
     page-break-after: always;
