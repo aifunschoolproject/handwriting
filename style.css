@@ -1026,14 +1026,16 @@ main {
     flex-wrap: nowrap;
     gap: 0.4rem;
     /* 全部控制項左上緊湊堆疊（標題→選單→字號→進度→主按鈕），左下角不放任何按鈕元素；
-       內容超欄高時中間篩選區收縮並內部捲動，主按鈕恒在保留帶之上 */
-    overflow: clip;
+       內容超欄高時（如超大字號）整欄向上捲動，可見底緣恒在保留帶之上 */
+    overflow-y: auto;
+    overflow-x: clip;
+    overscroll-behavior: contain;
     padding: calc(0.8rem + env(safe-area-inset-top)) 0.85rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
     border-bottom: none;
     border-right: 1px solid var(--line);
   }
   .topbar h1 { font-size: 1.15rem; font-weight: 800; }
-  .topbar .filters { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: clip; overscroll-behavior: contain; flex-direction: column; gap: 0.5rem; order: 0; }
+  .topbar .filters { flex: none; flex-direction: column; gap: 0.4rem; order: 0; }
   .topbar .filter { flex: none; }
   .topbar .fs-ctl, .topbar .progress-pill { flex-shrink: 0; }
   .topbar .progress-pill { margin-left: 0; width: max-content; }
@@ -1042,6 +1044,11 @@ main {
     font-size: 1rem; font-weight: 700;
     padding: 0.45rem 0.85rem; border-radius: 0.7rem;
     display: flex; align-items: center; gap: 0.5rem;
+  }
+  /* 矮橫式（高≤820，如旋轉手機/遊戲視窗）：篩選區改 2×2 網格收高度，
+     讓全部控制項（含主按鈕）不捲動就落在保留帶之上 */
+  @media (max-height: 820px) {
+    .topbar .filters { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
   }
 
   /* 字卡頁：右移側欄、取消 1200px 限寬、卡片加寬（約 5–11 欄隨視口） */
