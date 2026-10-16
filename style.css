@@ -677,7 +677,9 @@ main {
    底部（尤其左下角）預留空間給宿主 App 的跳轉／操控按鈕。
    矮畫面（<600px，如橫式手機）不適用：改用下方單欄＋矮畫面規則。── */
 @media (orientation: landscape) and (min-width: 720px) and (min-height: 600px) {
-  .detail { padding: 0; }
+  /* 橫式 App 側欄寬（左固定）：所有浮層／內容區右移此寬 */
+  html { --side-w: clamp(272px, 22vw, 330px); }
+  .detail { padding: 0; inset: 0 0 0 var(--side-w); }
   .detail-inner {
     width: 100%;
     height: 100%;
@@ -687,13 +689,13 @@ main {
     box-shadow: none;
     overflow: clip;
     display: grid;
-    grid-template-columns: clamp(320px, 27vw, 420px) minmax(0, 1fr);
+    grid-template-columns: clamp(292px, 24vw, 360px) minmax(0, 1fr);
     grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
-    gap: 0.55rem 1.4rem;
+    gap: 0.5rem 0.9rem;
     padding: calc(0.9rem + env(safe-area-inset-top))
-             calc(1.1rem + env(safe-area-inset-right))
+             calc(1rem + env(safe-area-inset-right))
              calc(var(--app-zone-h) + env(safe-area-inset-bottom))
-             calc(1.1rem + env(safe-area-inset-left));
+             1.1rem;
   }
   /* 左欄：標題 → 操作按鈕 → 字典（字典吃剩餘高度、欄內捲動，不會延伸到左下角） */
   .detail-head { grid-column: 1; grid-row: 1; }
@@ -1012,17 +1014,44 @@ main {
 /* ── 橫式平板（寬且有足夠高度）：其餘頁面同樣全螢幕、充分利用寬度，
    底部（尤其左下角）預留空間給宿主 App 的跳轉／操控按鈕。── */
 @media (orientation: landscape) and (min-width: 720px) and (min-height: 600px) {
-  /* 字卡頁：取消 1200px 限寬、卡片加寬（約 5–11 欄隨視口） */
+  /* ── App 側欄：topbar 由頂欄轉為左側固定欄（所有頁共用；
+     z-index 90 蓋過浮層，setup/detail/sheet 與 main 皆右移 --side-w）── */
+  .topbar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--side-w);
+    z-index: 90;
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    padding: calc(0.95rem + env(safe-area-inset-top)) 0.85rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+    border-bottom: none;
+    border-right: 1px solid var(--line);
+  }
+  .topbar h1 { font-size: 1.15rem; font-weight: 800; }
+  .topbar .filters { flex-direction: column; flex: none; gap: 0.5rem; order: 0; }
+  .topbar .filter { flex: none; }
+  .topbar .progress-pill { margin-left: 0; width: max-content; }
+  .topbar .btn-choose {
+    width: 100%; min-height: 2.8rem;
+    font-size: 1rem; font-weight: 700;
+    padding: 0.55rem 0.9rem; border-radius: 0.7rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+
+  /* 字卡頁：右移側欄、取消 1200px 限寬、卡片加寬（約 5–11 欄隨視口） */
   main {
     max-width: none;
-    padding: 0.8rem 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+    padding: 0.8rem 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom)) calc(var(--side-w) + 1.1rem);
   }
   .grid { grid-template-columns: repeat(auto-fill, minmax(7.4rem, 1fr)); gap: 0.85rem; }
   .char-card .char { font-size: 3.3rem; }
 
-  /* 選課：左欄＝步驟卡片（版本／年級／學期／課次），
+  /* 選課：右移側欄；左欄＝步驟卡片（版本／年級／學期／課次），
      右欄＝總結＋開始練習按鈕（置底），左下角因此保持空著 */
   .setup {
+    left: var(--side-w);
     padding: calc(1.1rem + env(safe-area-inset-top)) 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
     overflow: hidden;
   }
@@ -1046,10 +1075,9 @@ main {
   }
   .setup-summary { flex: none; }
   .setup-foot .btn { font-size: 1.2rem; padding: 0.95rem 1.2rem; min-height: 3.6rem; border-radius: 0.8rem; font-weight: 700; }
-  /* 頂欄「選課／習字本」同步放大（APP 感） */
-  .topbar .btn-choose { font-size: 0.95rem; min-height: 2.6rem; padding: 0.5rem 1rem; border-radius: 0.6rem; }
 
-  /* 習字本：橫式一列並排兩頁 A4（維持 210:297 比例），充分利用寬螢幕 */
+  /* 習字本：右移側欄；橫式一列並排兩頁 A4（維持 210:297 比例），充分利用寬螢幕 */
+  .sheet { left: var(--side-w); }
   .sheet-scroll {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
