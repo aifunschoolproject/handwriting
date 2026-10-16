@@ -1,6 +1,6 @@
 /* ── 手寫練習 ────────────────────────────────────────────
  * 兒童視力友善：所有文字／間距以 rem 表記、根字級由 --fs 驅動
- * （特大 22px 為基準／超大 44px，頂欄「字號」可切、自動記憶），
+ * （特大 22px 為基準／超大 29px，頂欄「字號」可切、自動記憶），
  * 整個介面隨之等比放大；版面幾何（字卡網格、寫字格）仍隨視窗自適應。
  * 注音字型參考 afs-apsa：自載源泉注音圓體，確保平板呈現一致。
  * ─────────────────────────────────────────────────────── */
@@ -101,7 +101,7 @@ button, select { touch-action: manipulation; }
 }
 .filter select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* 字號控制（特大 22px 基準／超大 44px）：整介面等比放大、自動記憶 */
+/* 字號控制（特大 22px 基準／超大 29px）：整介面等比放大、自動記憶 */
 .fs-ctl {
   display: inline-flex;
   align-items: center;
@@ -420,6 +420,7 @@ main {
   flex-shrink: 0;
 }
 .side-arrow:active { transform: scale(.92); background: var(--accent-soft); }
+.side-arrow:disabled { opacity: .35; pointer-events: none; }
 
 .writer-wrap {
   position: relative;
@@ -718,7 +719,6 @@ main {
   }
   /* 換課箭頭與返回／關閉鈕放大 */
   .side-arrow { width: 3rem; height: 3rem; font-size: 1.75rem; }
-  .detail-head .btn-sm { min-width: 2.9rem; min-height: 2.9rem; font-size: 1.4rem; }
   .detail-head .icon-btn { width: 2.9rem; height: 2.9rem; font-size: 1.15rem; }
   /* 字典：grid 第 3 列（minmax(0,1fr)、有確定高度）本身當捲動容器。
      不用 <details> 上的 display:flex——受其 shadow slot 影響無法約束子元素，
@@ -756,7 +756,6 @@ main {
     padding: calc(0.55rem + env(safe-area-inset-top)) calc(0.67rem + env(safe-area-inset-right)) calc(0.55rem + env(safe-area-inset-bottom)) calc(0.67rem + env(safe-area-inset-left));
   }
   .detail-head { flex-shrink: 0; }
-  .detail-head #btnBack { display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem; border-radius: 0.7rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 0.8rem; flex-shrink: 0; box-shadow: var(--shadow); }
   .detail-word { flex: 0 1 auto; min-width: 0; }
   .detail-meta { order: 3; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; padding-top: 0.22rem; gap: 0.22rem; align-items: center; font-size: 0.67rem; }
   .detail-char { font-size: 2.45rem; }
@@ -1025,23 +1024,23 @@ main {
     flex-direction: column;
     align-items: stretch;
     flex-wrap: nowrap;
-    gap: 0.75rem;
-    /* 超大字號（44px）時內容高超過視口：只有中間篩選區捲動，
-       底部「選課／習字本」主按鈕恒貼底、不受字號影響 */
+    gap: 0.4rem;
+    /* 全部控制項左上緊湊堆疊（標題→選單→字號→進度→主按鈕），左下角不放任何按鈕元素；
+       內容超欄高時中間篩選區收縮並內部捲動，主按鈕恒在保留帶之上 */
     overflow: clip;
-    padding: calc(0.95rem + env(safe-area-inset-top)) 0.85rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+    padding: calc(0.8rem + env(safe-area-inset-top)) 0.85rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
     border-bottom: none;
     border-right: 1px solid var(--line);
   }
   .topbar h1 { font-size: 1.15rem; font-weight: 800; }
-  .topbar .filters { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: clip; overscroll-behavior: contain; flex-direction: column; gap: 0.5rem; order: 0; padding-right: 0.2rem; }
+  .topbar .filters { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: clip; overscroll-behavior: contain; flex-direction: column; gap: 0.5rem; order: 0; }
   .topbar .filter { flex: none; }
   .topbar .fs-ctl, .topbar .progress-pill { flex-shrink: 0; }
   .topbar .progress-pill { margin-left: 0; width: max-content; }
   .topbar .btn-choose {
-    width: 100%; min-height: 2.8rem;
+    width: 100%; min-height: 2.5rem;
     font-size: 1rem; font-weight: 700;
-    padding: 0.55rem 0.9rem; border-radius: 0.7rem;
+    padding: 0.45rem 0.85rem; border-radius: 0.7rem;
     display: flex; align-items: center; gap: 0.5rem;
   }
 

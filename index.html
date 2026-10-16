@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=32">
 </head>
 <body>
 <header class="topbar">
@@ -34,7 +34,7 @@
   <div class="fs-ctl" id="fsCtl" role="group" aria-label="介面字號大小">
     <span class="fs-ctl-label">字號</span>
     <button type="button" data-fs="22">特大</button>
-    <button type="button" data-fs="44">超大</button>
+    <button type="button" data-fs="29">超大</button>
   </div>
   <div class="progress-pill" id="progressPill" title="本課已練習字數">0/0</div>
   <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
@@ -83,7 +83,6 @@
 <div class="detail" id="detail" hidden>
   <div class="detail-inner">
     <div class="detail-head">
-      <button class="btn btn-sm" id="btnBack" title="回字卡">‹</button>
       <div class="detail-word">
         <div class="detail-char" id="dChar">字</div>
         <div class="detail-zhuyin" id="dZhuYin"></div>
@@ -93,7 +92,7 @@
     </div>
 
     <div class="canvas-zone">
-      <button class="side-arrow" id="btnPrev" title="上一課">‹</button>
+      <button class="side-arrow" id="btnPrev" title="上一字" aria-label="上一字">‹</button>
       <div class="canvas-stack">
         <div class="writer-wrap" id="writerWrap">
           <div class="writer-box" id="writerBox"></div>
@@ -101,7 +100,7 @@
         <div class="done-flag" id="doneFlag">✔ 已練習</div>
         <div class="writer-hint" id="writerHint"></div>
       </div>
-      <button class="side-arrow" id="btnNext" title="下一課">›</button>
+      <button class="side-arrow" id="btnNext" title="下一字" aria-label="下一字">›</button>
     </div>
 
     <div class="detail-actions">
@@ -124,5 +123,5 @@
 <script src="dict.js?v=5"></script>
 <script src="jspdf.umd.min.js?v=1"></script>
 <script src="bpmf.js?v=5"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </html>

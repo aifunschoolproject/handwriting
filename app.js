@@ -21,8 +21,9 @@ const state = {
   course: '1',
   currentChar: null,
   currentName: null,
+  charIdx: null, // 本課字序（課內 ‹ › 翻字）
   ghostOn: true,
-  fs: 18, // 介面字號：18 標準／20 大／22 特大（root font-size 驅動整體放大）
+  fs: 22, // 介面字號：22 特大(基準)／29 超大（root font-size 驅動整體放大）
   done: {}, // { "南一/1/1/1": Set("一","二") }
 };
 
@@ -395,21 +396,33 @@ function renderDict(c) {
   dictBody.innerHTML = h;
 }
 
-/* ── 詳細視窗 ── */
+/* ── 詳細視窗 ──
+ * 畫布左右 ‹ › ＝課內上一字／下一字（邊界自動禁用）；
+ * 頂列 ✕（及 Esc）＝關閉回字卡，並回捲到該字卡；字卡頁頂欄「選課」換課次。 */
 function openDetail(c) {
+  const chars = courseChars();
+  let idx = chars.indexOf(c);
+  if (idx < 0) idx = chars.findIndex((x) => x.name === c.name);
   state.currentChar = c;
   state.currentName = c.name;
+  state.charIdx = idx;
   const d = DICT[c.name];
   dChar.textContent = c.name;
   dZhuYin.textContent = c.zhuYin;
   const radForm = d?.radForm || c.radical;
   const radicalName = d?.radical || c.radical || '';
   dMeta.innerHTML = bpmf([
+    (idx >= 0 ? `<span class="meta-item">第 ${idx + 1}／${chars.length} 字</span>` : ''),
     `<span class="meta-item">✍️ ${d?.strokes || c.fullStroke} 畫</span>`,
     (radForm ? `<span class="meta-item">🔤 部首 ${radForm}${radicalName && radicalName !== radForm ? `（${radicalName}）` : ''}</span>` : ''),
   ].join(''));
   detail.hidden = false;
   document.body.style.overflow = 'hidden';
+  // 「已練習」標記隨字更新（完成才顯示，換字不殘留）
+  doneFlag.classList.toggle('show', doneSet().has(c.name));
+  const atFirst = idx <= 0, atLast = idx < 0 || idx >= chars.length - 1;
+  $('btnPrev').disabled = atFirst;
+  $('btnNext').disabled = atLast;
 
   // 固定 480 內部空間，CSS 縮放；首次開啟延遲載入離線筆順包
   ensureWriter(c.name);
@@ -420,13 +433,25 @@ function openDetail(c) {
 }
 
 function closeDetail() {
+  const el = grid.querySelector(`.char-card[data-name="${CSS.escape(state.currentName)}"]`);
   detail.hidden = true;
   state.currentChar = null;
   state.currentName = null;
+  state.charIdx = null;
   // writer 常駐（setCharacter 會清手筆），僅隱藏視窗
   document.body.style.overflow = '';
+  if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); // 回捲到該字卡
   refreshCardStates();
   refreshProgress();
+}
+
+// 課內翻字：‹ 上一字／› 下一字（邊界無可翻字時按鈕禁用）
+function stepChar(delta) {
+  if (state.charIdx == null) return;
+  const chars = courseChars();
+  const ni = state.charIdx + delta;
+  if (ni < 0 || ni >= chars.length) return;
+  openDetail(chars[ni]);
 }
 
 
@@ -799,52 +824,6 @@ async function sheetPdf() {
 }
 
 
-function stepCourse(delta) {
-  const ver = DATA[state.version];
-  if (!ver) return;
-  // 1) 同學期內跳課次
-  const sem = ver[state.grade]?.[state.semester];
-  if (sem) {
-    const nums = Object.keys(sem).map(Number).sort((a, b) => a - b);
-    const next = nums[nums.indexOf(Number(state.course)) + delta];
-    if (next !== undefined) {
-      state.course = String(next);
-      selClass.value = state.course;
-      renderGrid();
-      return;
-    }
-  }
-  // 2) 同一年級跨學期（跳到目標學期第一/最後課）
-  const targetSem = delta > 0 ? (state.semester === '1' ? '2' : null)
-                              : (state.semester === '2' ? '1' : null);
-  if (targetSem && ver[state.grade]?.[targetSem]) {
-    const tSem = ver[state.grade][targetSem];
-    const nums = Object.keys(tSem).map(Number).sort((a, b) => a - b);
-    state.semester = targetSem;
-    selSemester.value = targetSem;
-    fillClasses();
-    state.course = String(delta > 0 ? nums[0] : nums[nums.length - 1]);
-    selClass.value = state.course;
-    renderGrid();
-    return;
-  }
-  // 3) 跨年級
-  const gn = Number(state.grade) + delta;
-  const gSem = delta > 0 ? '1' : '2';
-  if (ver[String(gn)]?.[gSem]) {
-    const tSem = ver[String(gn)][gSem];
-    const nums = Object.keys(tSem).map(Number).sort((a, b) => a - b);
-    state.grade = String(gn);
-    state.semester = gSem;
-    selGrade.value = state.grade;
-    selSemester.value = gSem;
-    fillGrades();
-    fillClasses();
-    state.course = String(delta > 0 ? nums[0] : nums[nums.length - 1]);
-    selClass.value = state.course;
-    renderGrid();
-  }
-}
 
 /* ── 事件綁定 ── */
 function bind() {
@@ -861,9 +840,15 @@ function bind() {
 
   // 詳細視窗開關
   $('btnClose').addEventListener('click', closeDetail);
-  $('btnBack').addEventListener('click', closeDetail);
   detail.addEventListener('click', (e) => { if (e.target === detail) closeDetail(); });
-  document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (!$('sheet').hidden) closeSheet(); else if (!detail.hidden) closeDetail(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (!$('sheet').hidden) closeSheet(); else if (!detail.hidden) closeDetail(); return; }
+    // 寫字畫面：← → 課內翻字
+    if (!detail.hidden) {
+      if (e.key === 'ArrowLeft') stepChar(-1);
+      else if (e.key === 'ArrowRight') stepChar(1);
+    }
+  });
 
   // 寫字控制
   $('btnAnimate').addEventListener('click', playAnimate);
@@ -871,8 +856,8 @@ function bind() {
   $('btnClear').addEventListener('click', resetWriter);
   $('btnGrid').addEventListener('click', () => setGrid(!state.gridOn));
   $('btnGhost').addEventListener('click', () => setGhost(!state.ghostOn));
-  $('btnPrev').addEventListener('click', () => { closeDetail(); stepCourse(-1); });
-  $('btnNext').addEventListener('click', () => { closeDetail(); stepCourse(1); });
+  $('btnPrev').addEventListener('click', () => stepChar(-1));
+  $('btnNext').addEventListener('click', () => stepChar(1));
 
   // 進入引導（大圖卡選課，點課卡即練）
   $('setupSteps').addEventListener('click', (e) => {
@@ -1014,8 +999,8 @@ function initSetup() {
   showSetup();
 }
 
-/* ── 字號（整介面等比放大）：root font-size 由 --fs 驅動，特大22(基準)/超大44，自動記憶 ── */
-const FS_LEVELS = [22, 44];
+/* ── 字號（整介面等比放大）：root font-size 由 --fs 驅動，特大22(基準)/超大29，自動記憶 ── */
+const FS_LEVELS = [22, 29];
 function setFs(px) {
   if (!FS_LEVELS.includes(px)) return;
   state.fs = px;
