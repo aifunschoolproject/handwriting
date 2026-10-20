@@ -657,15 +657,25 @@ function closePdfViewer() {
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
   if ($('sheet').hidden) document.body.style.overflow = '';
 }
-// 「⬇ 儲存 PDF」:一律觸發 <a download> 載入 PDF:
-//  • Android 內嵌 WebView:由 App 端 DownloadListener 接手存進「下載」資料夾
-//    (Unity/Vuplex 端需 SetDownloadsEnabled(true)+ 攔截事件;本頁只負責觸發)
-//  • 桌機/手機瀏覽器:瀏覽器直接存進「下載」資料夾
-// 用 blob: URL 而非 data: URL——對 WebView DownloadListener 觸發更可靠、無 ~2MB 上限;
-// Android System WebView 不支援 navigator.share(crbug 40540400),故不用分享列。
+// 「⬇ 儲存 PDF」:
+//  • App 端交接:PDF(base64)經 Vuplex 注入的 window.vuplex(與 nav/exit 同一
+//    訊息通道)交給 Unity,由 App 寫進公開「下載」資料夾——
+//    網頁沙箱沒有裝置檔案權限,「自動存下載」只能由 App 端做;
+//    App 端未接時此訊息無接收者,不影響下面的 <a download>
+//  • 接著一律觸發 <a download>(blob: URL,無 ~2MB 上限):
+//    桌機/手機瀏覽器直接存「下載」;App 端若另啟用 WebView 下載監聽亦由此接手
+//  • Android System WebView 不支援 navigator.share(crbug 40540400),不用分享列
 function savePdfToDevice() {
   if (!sheetLastPdf) return;
-  const { fname } = sheetLastPdf;
+  const { b64, fname } = sheetLastPdf;
+  const vuplex = window.vuplex;
+  if (isAndroidWebView() && vuplex && typeof vuplex.postMessage === 'function') {
+    try {
+      vuplex.postMessage(JSON.stringify({ type: 'save', name: fname, b64 }));
+    } catch (e) {
+      console.warn('vuplex 交接失敗:', e);
+    }
+  }
   const href = (pdfBlobUrl && !$('pdfView').hidden)
     ? pdfBlobUrl
     : URL.createObjectURL(b64ToPdfBlob(sheetLastPdf.b64));
