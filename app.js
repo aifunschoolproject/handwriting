@@ -608,6 +608,7 @@ function closeSheet() {
 }
 const isIOSBrowser = () => /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1); // iPadOS 13+ 偽裝 Mac
+const isAndroidWebView = () => /Android/i.test(navigator.userAgent);
 const b64ToPdfBlob = (b64) => {
   const bin = atob(b64), len = bin.length;
   const bytes = new Uint8Array(len);
@@ -617,11 +618,13 @@ const b64ToPdfBlob = (b64) => {
 // ── App 內 PDF 預覽＋儲存流程 ──────────────────────────────
 // 平板瀏覽器（App 內嵌 WebView 尤甚）不會自動彈出「存檔到裝置」提示,
 // <a download> 也可能被宿主無聲忽略 → 生成後改在 App 內明確引導存檔:
-//  • iOS Safari:iframe 可內建渲染 PDF → 預覽＋「分享鍵→儲存到檔案」指引
+//  • iOS Safari:iframe 內建渲染 PDF → 預覽＋「分享鍵→儲存到檔案」指引
 //    (iOS 無 Web 存檔 API,分享是唯一路徑)
-//  • 其他(桌機/Android/內嵌 WebView):Chromium 核心 iframe 不保證渲染
-//    PDF → 顯示「PDF 已就緒」卡:「⬇ 下載 PDF」(觸發宿主下載)+
-//    「↗ 新分頁開啟」備援(系統瀏覽器有完整 PDF 能力,可預覽/下載)
+//  • Android(含 Unity 內嵌 WebView):「⬇ 儲存 PDF」觸發 <a download>,
+//    由 App 端 DownloadListener 接手存進「下載」資料夾;
+//    Android System WebView 不支援 navigator.share(crbug 40540400),不用分享列
+//  • 其餘(桌機/手機瀏覽器):「⬇ 儲存 PDF」觸發 <a download> 存「下載」,
+//    另附「↗ 新分頁開啟」備援
 const canRenderPdfIframe = () => isIOSBrowser(); // 僅 iOS Safari 有內建 PDF 渲染
 function showPdfViewer(b64, fname) {
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
@@ -636,11 +639,15 @@ function showPdfViewer(b64, fname) {
   const help = $('pdfViewHelp');
   if (isIOSBrowser()) {
     help.innerHTML = 'iPad/iPhone 儲存步驟:點 PDF 右下角的<b>分享鍵(↑)</b>→<b>「儲存到 檔案」</b>選資料夾,或<b>列印</b>。iOS 不允許網頁直接存檔,請依此步驟。';
+  } else if (isAndroidWebView()) {
+    // 內嵌 WebView:navigator.share 與 <a download> 都要 App 端(DownloadListener)接手。
+    // 本頁觸發下載,由 Unity 端攔截後存進「下載」資料夾(見 afs-aps2 的 Pdf 下載處理)。
+    help.innerHTML = '點<b>「⬇ 儲存 PDF」</b>即可存進裝置的<b>「下載」</b>資料夾。';
   } else {
-    help.innerHTML = '點<b>「⬇ 下載 PDF」</b>即可存檔。<b>若沒反應</b>,請改用「↗ 新分頁開啟」,在開啟的分頁中下載。';
+    help.innerHTML = '點<b>「⬇ 儲存 PDF」</b>會直接存進<b>「下載」</b>資料夾。若沒反應,請改用「↗ 新分頁開啟」,在開啟的分頁中下載。';
   }
   $('btnPdfSave').hidden = isIOSBrowser();
-  $('btnPdfNewTab').hidden = renderable;
+  $('btnPdfNewTab').hidden = renderable || isAndroidWebView();
   $('pdfView').hidden = false;
   document.body.style.overflow = 'hidden';
 }
@@ -650,16 +657,23 @@ function closePdfViewer() {
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
   if ($('sheet').hidden) document.body.style.overflow = '';
 }
-// 「💾 儲存到裝置」:桌機/Android 觸發系統存檔視窗(全新手勢)
+// 「⬇ 儲存 PDF」:一律觸發 <a download> 載入 PDF:
+//  • Android 內嵌 WebView:由 App 端 DownloadListener 接手存進「下載」資料夾
+//    (Unity/Vuplex 端需 SetDownloadsEnabled(true)+ 攔截事件;本頁只負責觸發)
+//  • 桌機/手機瀏覽器:瀏覽器直接存進「下載」資料夾
+// 用 blob: URL 而非 data: URL——對 WebView DownloadListener 觸發更可靠、無 ~2MB 上限;
+// Android System WebView 不支援 navigator.share(crbug 40540400),故不用分享列。
 function savePdfToDevice() {
   if (!sheetLastPdf) return;
-  const { b64, fname } = sheetLastPdf;
-  const dataUrl = 'data:application/pdf;base64,' + b64;
+  const { fname } = sheetLastPdf;
+  const href = (pdfBlobUrl && !$('pdfView').hidden)
+    ? pdfBlobUrl
+    : URL.createObjectURL(b64ToPdfBlob(sheetLastPdf.b64));
   try {
     const d = document.createElement('a');
-    d.href = dataUrl; d.download = fname;
+    d.href = href; d.download = fname;
     document.body.appendChild(d); d.click();
-    setTimeout(() => d.remove(), 4000);
+    setTimeout(() => { d.remove(); if (href !== pdfBlobUrl) URL.revokeObjectURL(href); }, 4000);
   } catch (e) {
     alert('請點 PDF 檢視器工具列的「下載」鍵(⬇)存檔');
   }
