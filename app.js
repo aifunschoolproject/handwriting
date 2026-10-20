@@ -23,7 +23,7 @@ const state = {
   currentName: null,
   charIdx: null, // 本課字序（課內 ‹ › 翻字）
   ghostOn: true,
-  fs: 22, // 介面字號：22 特大(基準)／29 超大（root font-size 驅動整體放大）
+  fs: 22, // 介面字號：22 正常(基準)／26.4 特大(1.2倍)（root font-size 驅動整體放大）
   done: {}, // { "南一/1/1/1": Set("一","二") }
 };
 
@@ -641,122 +641,155 @@ function truncPx(ctx, text, max) {
   return t + '…';
 }
 
-// 繪一頁 A4 到 canvas（g：course 資料＋該頁字元）。版面＝螢幕 .sheet-page 的鏡像。
+// 繪一頁習字本到 canvas（g：course 資料＋該頁字元）。
+// 版面＝A4 全幅（210×297mm）鏡像 .sheet-page 的內部版面：S＝8px/mm、1680×2376px、
+// 內距 7/7/6mm（同 .sheet-page）、pt→mm 用 25.4/72、六格高度受限使 8 列全部入版。
+// 六格高度受限（A4 較 190mm 頁高，每列可用高決定格子邊長）、8 列 flex 均分剩餘高；
+// 8 列以 flex 均分剩餘高（.ch-row flex:1 0 auto、gap 0.6mm）、每列＝格子＋0.6mm＋.ch-info 行；
+// 表頭＝11pt 粗體標題行＋姓名/頁碼 baseline 對齊＋1px dotted＋0.5mm padding-bottom＋1.5px 墨線＋2mm margin。
+// 註解（.ch-info）：注音 8pt 藍粗＋「N 筆・部首 X」6.8pt 灰＋釋義 6.6pt＋例詞 6.6pt 橙，
+// 整行 nowrap、釋義截斷不溢出、左緣對齊第一格。
 function drawSheetPage(cv, g) {
   const ctx = cv.getContext('2d');
-  const W = 1191, H = 1684;                 // A4 @4px/mm
-  const px = (mm) => mm * 4;
-  const padT = px(4), padL = px(3), padB = px(4), padR = px(3);
-  const cw = W - padL - padR;
+  const S = 8;                         // px/mm
+  const mm = (v) => v * S;             // mm→px
+  const PT = 25.4 / 72;                // mm/pt
+  const W = 1680, H = 2376;            // A4 @8px/mm
+  const padT = mm(7), padL = mm(7), padB = mm(6), padR = mm(7);
+  const cw = W - padL - padR;          // 196mm 內容寬（210−2×7）
+  const ink = '#33302c', muted = '#8a8378', blue = '#4263eb', accent = '#e8590c';
+  const KA = '"TW-Kai","BiauKai","Kaiti TC",serif';
+  const ZY = '"BpmfGenSenRounded","TW-Kai",serif';
+  const F = (ptv, w) => `${w || 400} ${mm(ptv * PT)}px ${KA}`;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
-  const ink = '#33302c', muted = '#8a8378', blue = '#4263eb', accent = '#e8590c';
-  const F = (sz, fam, w) => `${w || 400} ${sz}px ${fam || '"TW-Kai","BiauKai","Kaiti TC",serif'}`;
-  // 表頭（hd-title 11pt≈57px）＋頁碼
-  let x = padL;
-  ctx.fillStyle = ink; ctx.font = F(57, null, 700); ctx.textBaseline = 'alphabetic';
-  ctx.fillText(g.title, x, padT + 57); x += ctx.measureText(g.title).width + px(2.4);
-  ctx.font = F(31, null, 400); ctx.fillStyle = muted;
-  const label = '姓名：';
-  ctx.fillText(label, x + px(12), padT + 45);
-  const lw = ctx.measureText(label).width;
-  const lineY = padT + 50, lineEnd = W - padR - px(16) - px(30) - px(11);
-  ctx.strokeStyle = '#c9c2b4'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
-  ctx.beginPath(); ctx.moveTo(x + px(2.4), lineY); ctx.lineTo(lineEnd, lineY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + lw + px(12), lineY); ctx.lineTo(W - padR - px(16) - px(18), lineY); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = muted; ctx.font = F(34, null, 400);
-  ctx.textAlign = 'right';
-  ctx.fillText(`第 ${g.pg} 頁`, W - padR, padT + 45);
-  ctx.textAlign = 'left';
-  const ruleY = padT + px(2.4) + 57 + px(1);
-  ctx.strokeStyle = ink; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.moveTo(padL, ruleY); ctx.lineTo(W - padR, ruleY); ctx.stroke();
-  // 8 列
-  const top = ruleY + px(2), bottom = H - padB;
-  const gapRows = px(0.6) * 8;
-  const infoH = g.dict ? 44 : 0;
-  const gapInfo = g.dict ? px(0.6) * 8 : 0;
-  const cell = Math.min(cw, Math.floor((bottom - top - gapRows - infoH * 8 - gapInfo) / 8));
-  let y = top;
   const opts = g.opts;
+  // 表頭：11pt 字（行盒 1.36em）、基線＝頂＋11pt＋約 0.8mm descent、dotted 同基線、
+  // 墨線＝行盒底＋0.5mm＋1.5px、rowsTop＝墨線＋2mm
+  const titleH = mm(11 * PT) * 1.36;
+  const baseY = padT + mm(11 * PT) + mm(0.8);
+  const dotY = baseY;
+  const ruleY = padT + titleH + mm(0.5) + 1.5;
+  const rowsTop = ruleY + mm(2);
+  // 六格＝全寬（寬度受限）、註解行高（.ch-info 6.6pt×1.3）
+  const cellGap = mm(1.2);
+  const cell = (cw - cellGap * 5) / 6;            // 31.67mm
+  const infoH = opts.dict ? mm(6.6 * PT) * 1.3 : 0;
+  const infoGap = opts.dict ? mm(0.6) : 0;
+  const n = g.chars.length;
+  const rowH = (H - padB - rowsTop + mm(0.6) * (n - 1)) / n;  // flex 均分
+  const cellF = Math.min(cell, rowH - infoH - infoGap);
+  const total = cellF * 6 + cellGap * 5;
+  const ox = padL + Math.floor((cw - total) / 2);
+  // ── 表頭 ──
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  ctx.fillStyle = ink; ctx.font = F(11, 700);
+  ctx.fillText(g.title, padL, baseY);
+  const tw = ctx.measureText(g.title).width;
+  const gap = mm(3.5);                         // .sheet-hd gap 0.6rem（root 22px＝13.2px）
+  const pgTxt = `第 ${g.pg} 頁`;
+  ctx.font = F(6.8);
+  const pgW = ctx.measureText(pgTxt).width;
+  const pgX = W - padR;
+  ctx.strokeStyle = muted; ctx.lineWidth = 1; ctx.setLineDash([1, 2]);
+  ctx.beginPath();
+  ctx.moveTo(padL + tw + gap, dotY); ctx.lineTo(pgX - pgW - gap, dotY);
+  ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = muted; ctx.font = F(7.5);
+  ctx.fillText('姓名：', padL + tw + gap, baseY);
+  ctx.textAlign = 'right';
+  ctx.fillText(pgTxt, pgX, baseY);
+  ctx.textAlign = 'left';
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(padL, ruleY); ctx.lineTo(W - padR, ruleY); ctx.stroke();
+  // ── 各列 ──
+  let y = rowsTop;
   for (const ch of g.chars) {
-    // 六格
-    const gap = px(1.2);
-    const total = cell * 6 + gap * 5;
-    const ox = padL + Math.floor((cw - total) / 2);
     for (let i = 0; i < 6; i++) {
-      const cx0 = ox + i * (cell + gap);
-      if (i === 0 || i === 2) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(cx0, y, cell, cell);
-        ctx.strokeStyle = '#e8b4b4'; ctx.lineWidth = 2;
-        const mid = cell / 2;
+      const cx0 = ox + i * (cellF + cellGap);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx0, y, cellF, cellF);
+      // 田字格淡紅十字：範字格＋所有空格；筆順/描紅有內容時不加
+      const cross = i === 0 || (i === 1 && !opts.stroke) || (i === 2 && !opts.trace) || i >= 3;
+      if (cross) {
+        ctx.strokeStyle = '#e8b4b4'; ctx.lineWidth = mm(0.5);
         ctx.beginPath();
-        ctx.moveTo(cx0 + mid, y); ctx.lineTo(cx0 + mid, y + cell);
-        ctx.moveTo(cx0, y + mid); ctx.lineTo(cx0 + cell, y + mid);
+        ctx.moveTo(cx0 + cellF / 2, y); ctx.lineTo(cx0 + cellF / 2, y + cellF);
+        ctx.moveTo(cx0, y + cellF / 2); ctx.lineTo(cx0 + cellF, y + cellF / 2);
         ctx.stroke();
-        ctx.strokeStyle = ink; ctx.lineWidth = 2.5;
-        ctx.strokeRect(cx0 + 1.25, y + 1.25, cell - 2.5, cell - 2.5);
-        if (i === 0) {
-          ctx.fillStyle = ink; ctx.font = F(cell * 0.95);
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(ch.name, cx0 + cell / 2, y + cell / 2 + cell * 0.04);
-          ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-        } else if (opts.stroke) {
-          const paths = strokePaths(ch.name);
-          if (paths) {
-            ctx.save();
-            ctx.translate(cx0, y);
-            ctx.scale(cell / 1000, cell / 1000);
-            ctx.strokeStyle = 'rgba(212,56,13,.40)';
-            ctx.lineWidth = 30;
-            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-            ctx.beginPath();
-            for (const stroke of paths) {
-              for (const seg of stroke) {
-                if (seg[0] === 'M') ctx.moveTo(seg[1], seg[2]);
-                else if (seg[0] === 'L') ctx.lineTo(seg[1], seg[2]);
-                else if (seg[0] === 'Q') ctx.quadraticCurveTo(seg[1], seg[2], seg[3], seg[4]);
-                else ctx.bezierCurveTo(seg[1], seg[2], seg[3], seg[4], seg[5], seg[6]);
-              }
-            }
-            ctx.stroke();
-            ctx.restore();
+      }
+      ctx.strokeStyle = ink; ctx.lineWidth = mm(0.35);
+      ctx.strokeRect(cx0 + mm(0.35) / 2, y + mm(0.35) / 2, cellF - mm(0.35), cellF - mm(0.35));
+    }
+    // 範字（.cell-glyph：SVG viewBox 1000、640px → cell*0.64、置中）
+    ctx.fillStyle = ink;
+    ctx.font = `400 ${Math.round(cellF * 0.64)}px ${KA}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ch.name, ox + cellF / 2, y + cellF / 2);
+    // 筆順（第 2 格：fill 淡紅、無描邊）
+    if (opts.stroke) {
+      const paths = strokePaths(ch.name);
+      if (paths) {
+        const cx0 = ox + (cellF + cellGap);
+        ctx.save();
+        ctx.translate(cx0, y);
+        ctx.scale(cellF / 1000, cellF / 1000);
+        ctx.fillStyle = 'rgba(212,56,13,.40)';
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        for (const stroke of paths) {
+          ctx.beginPath();
+          for (const seg of stroke) {
+            if (seg[0] === 'M') ctx.moveTo(seg[1], seg[2]);
+            else if (seg[0] === 'L') ctx.lineTo(seg[1], seg[2]);
+            else if (seg[0] === 'Q') ctx.quadraticCurveTo(seg[1], seg[2], seg[3], seg[4]);
+            else ctx.bezierCurveTo(seg[1], seg[2], seg[3], seg[4], seg[5], seg[6]);
           }
-        } else if (i === 2 && opts.trace) {
-          ctx.fillStyle = 'rgba(60,60,60,.30)'; ctx.font = F(cell * 0.95);
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(ch.name, cx0 + cell / 2, y + cell / 2 + cell * 0.04);
-          ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+          ctx.fill();
         }
-      } else {
-        ctx.strokeStyle = ink; ctx.lineWidth = 2.5;
-        ctx.strokeRect(cx0 + 1.25, y + 1.25, cell - 2.5, cell - 2.5);
+        ctx.restore();
       }
     }
-    y += cell + px(0.6);
+    // 描紅（第 3 格：30% 淡字）
+    if (opts.trace) {
+      const cx0 = ox + 2 * (cellF + cellGap);
+      ctx.fillStyle = 'rgba(60,60,60,.30)';
+      ctx.font = `400 ${Math.round(cellF * 0.64)}px ${KA}`;
+      ctx.fillText(ch.name, cx0 + cellF / 2, y + cellF / 2);
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // 註解（.ch-info：整行 baseline 對齊、左緣＝第一格）
+    const iy = y + cellF + infoGap + infoH * 0.7;
     if (opts.dict) {
       const d = DICT[ch.name];
       const reading = g.readings && g.readings[ch.name];
-      ctx.fillStyle = blue; ctx.font = F(42, '"BpmfGenSenRounded","TW-Kai",serif', 700);
+      const radForm = (d && d.radForm) || ch.radical;
+      const def = reading && reading.defs && reading.defs[0] && reading.defs[0].d;
+      const ex = reading && reading.ex ? `例：${reading.ex.split('、')[0]}` : '';
       let ix = ox;
-      if (opts.pinyin) { ctx.fillText(ch.zhuYin, ix, y + 40); ix += ctx.measureText(ch.zhuYin).width + 18; }
-      ctx.fillStyle = muted; ctx.font = F(33);
-      const meta = `${d && d.strokes ? d.strokes : ch.fullStroke} 筆` +
-        (d && d.radForm ? `・部首 ${d.radForm}` : '') +
-        (ch.type === '認讀字' ? '・認讀字' : '') + '　';
-      ctx.fillText(meta, ix, y + 40); ix += ctx.measureText(meta).width;
-      if (reading) {
-        const def = reading.defs && reading.defs[0] && reading.defs[0].d;
-        const ex = reading.ex ? `例：${reading.ex.split('、')[0]}` : '';
-        const maxDef = W - padR - ix - (ex ? 40 + 33 : 0) - 10;
-        if (def) { ctx.fillStyle = ink; ctx.font = F(33); ctx.fillText(truncPx(ctx, def, maxDef), ix, y + 40); ix += ctx.measureText(def).width + 12; }
-        if (ex) { ctx.fillStyle = accent; ctx.font = F(33); ctx.fillText(ex, ix, y + 40); }
+      if (opts.pinyin) {
+        ctx.fillStyle = blue; ctx.font = `700 ${mm(8 * PT)}px ${ZY}`;
+        ctx.fillText(ch.zhuYin || '', ix, iy);
+        ix += ctx.measureText(ch.zhuYin || '').width + mm(1.6);
       }
-      y += 44 + px(0.6);
+      const meta = `${(d && d.strokes) || ch.fullStroke} 筆` +
+        (radForm ? `・部首 ${radForm}` : '') + (ch.type === '認讀字' ? '・認讀字' : '');
+      ctx.font = F(6.6);
+      const exW = ex ? ctx.measureText(ex).width + mm(1) : 0;
+      const maxDef = W - padR - ix - exW;
+      ctx.fillStyle = muted; ctx.font = F(6.8);
+      const mt = truncPx(ctx, meta, maxDef);
+      ctx.fillText(mt, ix, iy);
+      ix += ctx.measureText(mt).width + (def ? mm(1) : 0);
+      if (def) {
+        ctx.fillStyle = ink; ctx.font = F(6.6);
+        const dt = truncPx(ctx, def, maxDef);
+        ctx.fillText(dt, ix, iy);
+        ix += ctx.measureText(dt).width;
+      }
+      if (ex) { ctx.fillStyle = accent; ctx.font = F(6.6); ctx.fillText(ex, ix, iy); }
     }
+    y += rowH;
   }
 }
 
@@ -770,11 +803,11 @@ async function sheetPdf() {
   btn.disabled = true; btn.textContent = '⏳ 產生中…';
   try {
     const opts = sheetOpts();
-    // 字型先載入再繪（canvas 用已載入字型；PDF 內 jsPDF 再嵌入子集）
+    // 字型先載入再繪（canvas 內文 96dpi：11pt＝14.7px、範字約 130px）
     try {
       await Promise.all([
-        document.fonts.load('700 57px "TW-Kai"'), document.fonts.load('400 33px "TW-Kai"'),
-        document.fonts.load('700 42px "BpmfGenSenRounded"'),
+        document.fonts.load('700 15px "TW-Kai"'), document.fonts.load('400 130px "TW-Kai"'),
+        document.fonts.load('400 9px "TW-Kai"'), document.fonts.load('700 10px "BpmfGenSenRounded"'),
       ]);
     } catch {}
     // 筆順資料（缺字先補抓）
@@ -793,7 +826,7 @@ async function sheetPdf() {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
     const cv = document.createElement('canvas');
-    cv.width = 1191; cv.height = 1684;
+    cv.width = 1680; cv.height = 2376;
     let pg = 0, first = true;
     const tick = () => new Promise((r) => setTimeout(r, 0));
     for (const c of courses) {
@@ -810,7 +843,33 @@ async function sheetPdf() {
     }
     const semName = { '1': '上', '2': '下' }[state.semester] || '';
     const fname = `習字本_${VERSION_LABELS[state.version] || state.version}_${state.grade}年${semName}${pg}頁.pdf`;
-    pdf.save(fname);
+    // 不用 pdf.save()：內嵌 jsPDF 的 FileSaver 用「未掛進 DOM 的 <a>＋合成
+    // MouseEvent(click)」觸發下載，部分平板 WebView 的 DownloadListener 不會
+    // 攔截（blob URL 尤甚）→ 點了沒反應。改走 AFS 宿主已驗證可行的路徑：
+    // 真實 Blob → <a download> 掛進 document.body → 原生 a.click()。
+    // 極舊 WebView 沒有 Blob/URL API 時退回 data URL。
+    let dataUrl;
+    try {
+      const blob = pdf.output('blob');
+      if (blob && typeof URL !== 'undefined' && URL.createObjectURL) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+      } else {
+        dataUrl = pdf.output('datauristring');
+        throw new Error('no-blob');
+      }
+    } catch (e) {
+      if (!dataUrl) dataUrl = pdf.output('datauristring');
+      const a = document.createElement('a');
+      a.href = dataUrl; a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => a.remove(), 4000);
+    }
     btn.textContent = '✅ 已下載';
   } catch (err) {
     console.error('PDF 產生失敗', err);
@@ -999,8 +1058,8 @@ function initSetup() {
   showSetup();
 }
 
-/* ── 字號（整介面等比放大）：root font-size 由 --fs 驅動，特大22(基準)/超大29，自動記憶 ── */
-const FS_LEVELS = [22, 29];
+/* ── 字號（整介面等比放大）：root font-size 由 --fs 驅動，正常22(基準)/特大26.4(1.2倍)，自動記憶 ── */
+const FS_LEVELS = [22, 26.4];
 function setFs(px) {
   if (!FS_LEVELS.includes(px)) return;
   state.fs = px;

@@ -688,10 +688,14 @@ main {
     max-height: none;
     border-radius: 0;
     box-shadow: none;
-    overflow: clip;
+    /* 特大字號時頭部＋按鈕列吃掉幾乎全部欄高：1fr 行若 min 為 0 會被壓到 0px、
+       字典裁切又無法捲動（內層 overflow 被 .detail-inner 的 clip 擋住）。
+       字典行保證 ≥3.4rem（summary 恒可見可點、欄內可捲），整欄必要時隨容器捲動 */
+    overflow-y: auto; overflow-x: clip;
+    overscroll-behavior: contain;
     display: grid;
     grid-template-columns: clamp(292px, 24vw, 360px) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, auto) minmax(3.4rem, 1fr);
     gap: 0.5rem 0.9rem;
     padding: calc(0.9rem + env(safe-area-inset-top))
              calc(1rem + env(safe-area-inset-right))
