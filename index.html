@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
 <header class="topbar">
@@ -51,7 +51,7 @@
     <label class="sheet-opt"><input type="checkbox" id="sheetTrace" checked> <span class="lbl">描紅格</span></label>
     <span class="sheet-count" id="sheetCount"></span>
     <button class="btn btn-ghost-btn" id="btnSheetClose">✕ 關閉</button>
-    <button class="btn btn-ghost-btn" id="btnSheetOpen" hidden>↗ 開啟／下載</button>
+    <button class="btn btn-ghost-btn" id="btnSheetOpen" hidden>↗ 開啟/預覽 PDF</button>
     <button class="btn btn-accent" id="btnSheetPrint">⬇ 下載 PDF</button>
   </div>
   <div class="sheet-scroll" id="sheetScroll"></div>
@@ -119,10 +119,24 @@
   </div>
 </div>
 
+<!-- PDF 預覽（App 內展示＋儲存指引;平板瀏覽器不會自動提示存檔,必須在頁面內明確告知） -->
+<div class="pdf-view" id="pdfView" hidden>
+  <div class="pdf-view-bar">
+    <span class="pdf-view-name" id="pdfViewName"></span>
+    <button class="btn btn-ghost-btn" id="btnPdfClose">✕ 關閉</button>
+  </div>
+  <div class="pdf-view-cta">
+    <button class="btn btn-accent btn-pdf-save" id="btnPdfSave">⬇ 下載 PDF</button>
+    <div class="pdf-view-help" id="pdfViewHelp"></div>
+    <button class="btn btn-ghost-btn" id="btnPdfNewTab" hidden>↗ 新分頁開啟</button>
+  </div>
+  <div class="pdf-view-frame"><iframe id="pdfViewFrame" title="PDF 預覽"></iframe><div class="pdf-view-empty" id="pdfViewEmpty">📄<br><b>PDF 已就緒</b><span>請點上方「⬇ 下載 PDF」存檔</span></div></div>
+</div>
+
 <script src="hanzi-writer.min.js?v=1"></script>
 <script src="data.js?v=1"></script>
 <script src="dict.js?v=5"></script>
 <script src="jspdf.umd.min.js?v=1"></script>
 <script src="bpmf.js?v=5"></script>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </html>

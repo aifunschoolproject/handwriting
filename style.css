@@ -1095,6 +1095,7 @@ main {
      用 flex-wrap（不用 grid）：grid 的 auto 列對 aspect-ratio 子項量高時寬度未定、
      行軌道崩縮到最小內容高，多頁時頁與頁重疊；flex 先定寬再由比例定高，行行堆疊 */
   .sheet { left: var(--side-w); }
+  .pdf-view.pdf-view { inset: 0 0 0 var(--side-w); }
   .sheet-scroll {
     display: flex;
     flex-direction: row;
@@ -1150,4 +1151,93 @@ main {
   /* 橫式列印時 landscape 媒體查詢仍命中、格子會縮小：復原全寬（A4 縱向 8 列放得下） */
   .sheet-page .cell { width: 100%; justify-self: stretch; }
   .sheet-page:last-child { page-break-after: auto; break-after: auto; }
+}
+
+/* ── PDF 預覽（App 內展示＋儲存指引）────────────────────
+   平板瀏覽器（尤其 App 內嵌 WebView）不會自動彈出存檔提示 →
+   生成後直接在 App 內展示 PDF,並給出明確的「儲存到裝置」操作。── */
+.pdf-view {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #2b2620;
+  display: flex;
+  flex-direction: column;
+}
+.pdf-view[hidden] { display: none; }
+.pdf-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.8rem;
+  padding-top: calc(0.5rem + env(safe-area-inset-top));
+  background: #211d18;
+  color: #fff;
+}
+.pdf-view-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.pdf-view .btn-ghost-btn {
+  background: #3a342c;
+  color: #fff;
+  border-color: #4a4238;
+}
+.pdf-view-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1rem 0.5rem;
+  background: #211d18;
+}
+.btn-pdf-save {
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0.7rem 2.2rem;
+  min-height: var(--touch);
+}
+.pdf-view-help {
+  color: #e8dcc8;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-align: center;
+  max-width: 40rem;
+}
+.pdf-view-help b { color: #ffd8a8; }
+.pdf-view-frame iframe.pdf-frame-hidden { display: none; }
+.pdf-view-empty {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: #fff;
+  color: var(--muted);
+  font-size: 1.6rem;
+  text-align: center;
+}
+.pdf-view-empty b { font-size: 1.1rem; color: var(--ink); }
+.pdf-view-empty span { font-size: 0.85rem; }
+.pdf-view-frame.pdf-frame-empty .pdf-view-empty { display: flex; }
+.pdf-view-cta .btn-pdf-save { max-width: 100%; }
+.pdf-view-frame {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.pdf-view-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
 }

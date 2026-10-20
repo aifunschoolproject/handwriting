@@ -588,8 +588,9 @@ function renderSheet() {
 }
 
 let sheetToken = 0;
-// 最近一次生成的 PDF（b64＝base64 字串、fname＝檔名）,供「開啟/下載」鈕隨時重試
+// 最近一次生成的 PDF（b64＝base64 字串、fname＝檔名）
 let sheetLastPdf = null;
+let pdfBlobUrl = null; // PDF 預覽用的 blob URL（開 viewer 時建立、關時釋放）
 function openSheet() {
   const tok = ++sheetToken;
   $('sheet').hidden = false;
@@ -613,64 +614,75 @@ const b64ToPdfBlob = (b64) => {
   for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: 'application/pdf' });
 };
-// 把 PDF 交接到平板瀏覽器（iPad/iOS Safari 實務）:
-//  iOS Safari 對 <a download> 的 data/blob URL 一律忽略 download 屬性 →
-//  「下載」根本不會發生；window.open 的 data URL 又有 ~2MB 上限 → 靜默空白。
-//  唯一穩定路徑是讓「原生 PDF 檢視器」出現（工具列 → 分享 → 儲存到檔案/列印）:
-//  ① 小檔(b64<2.4MB):新分頁載入 data URL（直達檢視器,回鍵回本頁）
-//  ② 新分頁被彈窗攔截 → 錨點 target=_blank 開啟
-//  ③ 大檔/全被擋:目前分頁 blob URL 導航（無 2MB 上限,檢視器呈現,回鍵返回）
-//  非 iOS(桌機/Android):直接下載（錨點 download 有效）＋分頁開啟備援。
-// 回傳 'tab'｜'nav'｜false
-function deliverSheetPdf(b64, fname) {
-  const dataUrl = 'data:application/pdf;base64,' + b64;
-  const openTab = () => {
-    try {
-      const t = window.open('', '_blank');
-      if (t) { t.location.assign(dataUrl); return true; }
-    } catch (e) {}
-    try {
-      const a = document.createElement('a');
-      a.href = dataUrl; a.target = '_blank'; a.rel = 'noopener';
-      document.body.appendChild(a); a.click();
-      setTimeout(() => a.remove(), 4000);
-      return true;
-    } catch (e) {}
-    return false;
-  };
-  const openBlobTab = () => {
-    try {
-      const u = URL.createObjectURL(b64ToPdfBlob(b64));
-      const t = window.open('', '_blank');
-      if (t) { t.location.assign(u); return true; }
-    } catch (e) {}
-    return false;
-  };
+// ── App 內 PDF 預覽＋儲存流程 ──────────────────────────────
+// 平板瀏覽器（App 內嵌 WebView 尤甚）不會自動彈出「存檔到裝置」提示,
+// <a download> 也可能被宿主無聲忽略 → 生成後改在 App 內明確引導存檔:
+//  • iOS Safari:iframe 可內建渲染 PDF → 預覽＋「分享鍵→儲存到檔案」指引
+//    (iOS 無 Web 存檔 API,分享是唯一路徑)
+//  • 其他(桌機/Android/內嵌 WebView):Chromium 核心 iframe 不保證渲染
+//    PDF → 顯示「PDF 已就緒」卡:「⬇ 下載 PDF」(觸發宿主下載)+
+//    「↗ 新分頁開啟」備援(系統瀏覽器有完整 PDF 能力,可預覽/下載)
+const canRenderPdfIframe = () => isIOSBrowser(); // 僅 iOS Safari 有內建 PDF 渲染
+function showPdfViewer(b64, fname) {
+  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
+  pdfBlobUrl = URL.createObjectURL(b64ToPdfBlob(b64));
+  const frame = $('pdfViewFrame');
+  const renderable = canRenderPdfIframe();
+  frame.classList.toggle('pdf-frame-hidden', !renderable);
+  $('pdfViewFrame').parentElement.classList.toggle('pdf-frame-empty', !renderable);
+  if (renderable) frame.src = pdfBlobUrl;
+  const MB = (b64.length * 3 / 4 / 1048576).toFixed(1);
+  $('pdfViewName').textContent = fname + `（${MB} MB）`;
+  const help = $('pdfViewHelp');
   if (isIOSBrowser()) {
-    if (b64.length < 2400000) {
-      if (openTab()) return 'tab';
-    } else if (openBlobTab()) return 'tab';
-    try {
-      const u = URL.createObjectURL(b64ToPdfBlob(b64));
-      window.location.assign(u); // 目前分頁 → 原生 PDF 檢視器（回鍵返回）
-      return 'nav';
-    } catch (e) { return false; }
+    help.innerHTML = 'iPad/iPhone 儲存步驟:點 PDF 右下角的<b>分享鍵(↑)</b>→<b>「儲存到 檔案」</b>選資料夾,或<b>列印</b>。iOS 不允許網頁直接存檔,請依此步驟。';
+  } else {
+    help.innerHTML = '點<b>「⬇ 下載 PDF」</b>即可存檔。<b>若沒反應</b>,請改用「↗ 新分頁開啟」,在開啟的分頁中下載。';
   }
-  // 桌機／Android:直接下載為主（錨點 download 有效）,分頁開啟做備援
+  $('btnPdfSave').hidden = isIOSBrowser();
+  $('btnPdfNewTab').hidden = renderable;
+  $('pdfView').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+function closePdfViewer() {
+  $('pdfView').hidden = true;
+  $('pdfViewFrame').src = 'about:blank';
+  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
+  if ($('sheet').hidden) document.body.style.overflow = '';
+}
+// 「💾 儲存到裝置」:桌機/Android 觸發系統存檔視窗(全新手勢)
+function savePdfToDevice() {
+  if (!sheetLastPdf) return;
+  const { b64, fname } = sheetLastPdf;
+  const dataUrl = 'data:application/pdf;base64,' + b64;
   try {
     const d = document.createElement('a');
     d.href = dataUrl; d.download = fname;
     document.body.appendChild(d); d.click();
     setTimeout(() => d.remove(), 4000);
-  } catch (e) {}
-  if (openTab()) return 'tab';
-  if (openBlobTab()) return 'tab';
-  return false;
+  } catch (e) {
+    alert('請點 PDF 檢視器工具列的「下載」鍵(⬇)存檔');
+  }
 }
-// 「開啟/下載」鈕:全新觸控手勢,永遠不被彈窗攔截,任何時候都能重試
+// 「↗ 新分頁開啟」:內嵌 WebView 的備援(新分頁由系統瀏覽器打開,
+// 有完整 PDF 插件,可預覽/下載)
+function openPdfNewTab() {
+  if (!sheetLastPdf) return;
+  const { b64, fname } = sheetLastPdf;
+  const dataUrl = 'data:application/pdf;base64,' + b64;
+  try {
+    const t = window.open('', '_blank');
+    if (t) { t.location.assign(dataUrl); return; }
+  } catch (e) {}
+  const a = document.createElement('a');
+  a.href = dataUrl; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => a.remove(), 4000);
+}
+// 「開啟/預覽 PDF」鈕:App 內預覽＋儲存指引(任何時候都能重開,不被彈窗攔截)
 function sheetOpenLast() {
   if (!sheetLastPdf) return;
-  deliverSheetPdf(sheetLastPdf.b64, sheetLastPdf.fname);
+  showPdfViewer(sheetLastPdf.b64, sheetLastPdf.fname);
 }
 
 /* ── 習字本 PDF 下載（jsPDF + canvas 自繪 A4 版面）──
@@ -919,18 +931,15 @@ async function sheetPdf() {
     }
     const semName = { '1': '上', '2': '下' }[state.semester] || '';
     const fname = `習字本_${VERSION_LABELS[state.version] || state.version}_${state.grade}年${semName}${pg}頁.pdf`;
-    // 生成 PDF → base64（記下供「開啟/下載」鈕隨時重試;blob 由 b64 重建,
-    // 大檔不受 data URL 2MB 上限限制）。
+    // 生成 PDF → base64(記下供「開啟/下載」隨時重開)。平板瀏覽器不會自動
+    // 提示存檔 → 直接在 App 內展示 PDF＋給出明確的儲存步驟/按鈕。
     const dataUrl = pdf.output('datauristring');
     const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
     sheetLastPdf = { b64, fname };
-    const openBtn = $('btnSheetOpen');
-    openBtn.hidden = false;
-    openBtn.textContent = '↗ 開啟／下載';
-    const how = deliverSheetPdf(b64, fname);
-    btn.textContent = how === 'tab' ? '✅ 已開啟 PDF'
-      : how === 'nav' ? '✅ 已開啟 PDF（回鍵返回）'
-      : '✅ 完成・點「開啟/下載」';
+    $('btnSheetOpen').hidden = false;
+    $('btnSheetOpen').textContent = '↗ 開啟/預覽 PDF';
+    showPdfViewer(b64, fname);
+    btn.textContent = '✅ PDF 已就緒';
   } catch (err) {
     console.error('PDF 產生失敗', err);
     alert('PDF 產生失敗：' + err.message);
@@ -961,7 +970,7 @@ function bind() {
   $('btnClose').addEventListener('click', closeDetail);
   detail.addEventListener('click', (e) => { if (e.target === detail) closeDetail(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (!$('sheet').hidden) closeSheet(); else if (!detail.hidden) closeDetail(); return; }
+    if (e.key === 'Escape') { if (!$('pdfView').hidden) closePdfViewer(); else if (!$('sheet').hidden) closeSheet(); else if (!detail.hidden) closeDetail(); return; }
     // 寫字畫面：← → 課內翻字
     if (!detail.hidden) {
       if (e.key === 'ArrowLeft') stepChar(-1);
@@ -997,6 +1006,9 @@ function bind() {
   $('btnSheetClose').addEventListener('click', closeSheet);
   $('btnSheetPrint').addEventListener('click', () => sheetPdf());
   $('btnSheetOpen').addEventListener('click', sheetOpenLast);
+  $('btnPdfClose').addEventListener('click', closePdfViewer);
+  $('btnPdfSave').addEventListener('click', savePdfToDevice);
+  $('btnPdfNewTab').addEventListener('click', openPdfNewTab);
   for (const id of ['sheetGrade', 'sheetStroke', 'sheetPinyin', 'sheetDict', 'sheetTrace']) {
     $(id).addEventListener('change', renderSheet);
   }
