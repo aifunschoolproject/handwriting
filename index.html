@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=33">
+<link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
 <header class="topbar">
@@ -51,6 +51,7 @@
     <label class="sheet-opt"><input type="checkbox" id="sheetTrace" checked> <span class="lbl">描紅格</span></label>
     <span class="sheet-count" id="sheetCount"></span>
     <button class="btn btn-ghost-btn" id="btnSheetClose">✕ 關閉</button>
+    <button class="btn btn-ghost-btn" id="btnSheetOpen" hidden>↗ 開啟／下載</button>
     <button class="btn btn-accent" id="btnSheetPrint">⬇ 下載 PDF</button>
   </div>
   <div class="sheet-scroll" id="sheetScroll"></div>
@@ -123,5 +124,5 @@
 <script src="dict.js?v=5"></script>
 <script src="jspdf.umd.min.js?v=1"></script>
 <script src="bpmf.js?v=5"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </html>

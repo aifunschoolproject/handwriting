@@ -205,11 +205,14 @@ let hanziDataReady = null; // Promise
 function loadHanziData() {
   if (window.HANZI_DATA) return Promise.resolve(true);
   if (hanziDataReady) return hanziDataReady;
+  let settled = false;
   hanziDataReady = new Promise((resolve) => {
     const s = document.createElement('script');
     s.src = 'hanzi-data.js?v=3';
-    s.onload = () => resolve(true);
-    s.onerror = () => resolve(false); // 離線包不在 → 靠 CDN 回落
+    const finish = (ok) => { if (!settled) { settled = true; if (!ok) hanziDataReady = null; resolve(ok); } };
+    s.onload = () => finish(true);
+    s.onerror = () => finish(false); // 離線包不在 → 靠 CDN 回落
+    setTimeout(() => finish(false), 15000); // 下載卡住也放行,避免「產生中…」永不結束
     document.head.appendChild(s);
   });
   return hanziDataReady;
@@ -585,6 +588,8 @@ function renderSheet() {
 }
 
 let sheetToken = 0;
+// 最近一次生成的 PDF（b64＝base64 字串、fname＝檔名）,供「開啟/下載」鈕隨時重試
+let sheetLastPdf = null;
 function openSheet() {
   const tok = ++sheetToken;
   $('sheet').hidden = false;
@@ -592,18 +597,89 @@ function openSheet() {
   // 筆順 SVG 需要 hanzi-data（延遲載入）；先顯示格子，資料落地再補筆順
   renderSheet();
   loadHanziData().then(() => { if (tok === sheetToken) renderSheet(); });
+  $('btnSheetOpen').hidden = !sheetLastPdf;
 }
 function closeSheet() {
   sheetToken++;
+  sheetLastPdf = null;
   $('sheet').hidden = true;
   document.body.style.overflow = '';
+}
+const isIOSBrowser = () => /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1); // iPadOS 13+ 偽裝 Mac
+const b64ToPdfBlob = (b64) => {
+  const bin = atob(b64), len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: 'application/pdf' });
+};
+// 把 PDF 交接到平板瀏覽器（iPad/iOS Safari 實務）:
+//  iOS Safari 對 <a download> 的 data/blob URL 一律忽略 download 屬性 →
+//  「下載」根本不會發生；window.open 的 data URL 又有 ~2MB 上限 → 靜默空白。
+//  唯一穩定路徑是讓「原生 PDF 檢視器」出現（工具列 → 分享 → 儲存到檔案/列印）:
+//  ① 小檔(b64<2.4MB):新分頁載入 data URL（直達檢視器,回鍵回本頁）
+//  ② 新分頁被彈窗攔截 → 錨點 target=_blank 開啟
+//  ③ 大檔/全被擋:目前分頁 blob URL 導航（無 2MB 上限,檢視器呈現,回鍵返回）
+//  非 iOS(桌機/Android):直接下載（錨點 download 有效）＋分頁開啟備援。
+// 回傳 'tab'｜'nav'｜false
+function deliverSheetPdf(b64, fname) {
+  const dataUrl = 'data:application/pdf;base64,' + b64;
+  const openTab = () => {
+    try {
+      const t = window.open('', '_blank');
+      if (t) { t.location.assign(dataUrl); return true; }
+    } catch (e) {}
+    try {
+      const a = document.createElement('a');
+      a.href = dataUrl; a.target = '_blank'; a.rel = 'noopener';
+      document.body.appendChild(a); a.click();
+      setTimeout(() => a.remove(), 4000);
+      return true;
+    } catch (e) {}
+    return false;
+  };
+  const openBlobTab = () => {
+    try {
+      const u = URL.createObjectURL(b64ToPdfBlob(b64));
+      const t = window.open('', '_blank');
+      if (t) { t.location.assign(u); return true; }
+    } catch (e) {}
+    return false;
+  };
+  if (isIOSBrowser()) {
+    if (b64.length < 2400000) {
+      if (openTab()) return 'tab';
+    } else if (openBlobTab()) return 'tab';
+    try {
+      const u = URL.createObjectURL(b64ToPdfBlob(b64));
+      window.location.assign(u); // 目前分頁 → 原生 PDF 檢視器（回鍵返回）
+      return 'nav';
+    } catch (e) { return false; }
+  }
+  // 桌機／Android:直接下載為主（錨點 download 有效）,分頁開啟做備援
+  try {
+    const d = document.createElement('a');
+    d.href = dataUrl; d.download = fname;
+    document.body.appendChild(d); d.click();
+    setTimeout(() => d.remove(), 4000);
+  } catch (e) {}
+  if (openTab()) return 'tab';
+  if (openBlobTab()) return 'tab';
+  return false;
+}
+// 「開啟/下載」鈕:全新觸控手勢,永遠不被彈窗攔截,任何時候都能重試
+function sheetOpenLast() {
+  if (!sheetLastPdf) return;
+  deliverSheetPdf(sheetLastPdf.b64, sheetLastPdf.fname);
 }
 
 /* ── 習字本 PDF 下載（jsPDF + canvas 自繪 A4 版面）──
  * 嵌入式 WebView 的 window.print() 常無支援、系統預覽頁裁切也不可靠；
  * 改由 canvas 直接繪製每一頁 A4（版型與螢幕 .sheet-page 相同），jsPDF 輸出真實
- * PDF 檔（字型嵌入、任何裝置開啟一致）並下載。
- * 尺寸：mm → px 固定 4（1mm＝4px），1191×1684px＝A4。 */
+ * PDF 檔（字型嵌入、任何裝置開啟一致）；下載走「原生 PDF 檢視器」路徑:
+ * iOS Safari 忽略 <a download> 且 data URL 有 ~2MB 上限 → 新分頁/blob 開啟
+ * （檢視器工具列「分享」→ 儲存到檔案/列印）,桌機/Android 順帶直接下載。
+ * 尺寸：mm → px 固定 8（1mm＝8px），1680×2376px＝A4。 */
 function sheetOpts() {
   return { stroke: $('sheetStroke').checked, trace: $('sheetTrace').checked,
            dict: $('sheetDict').checked, pinyin: $('sheetPinyin').checked };
@@ -843,34 +919,18 @@ async function sheetPdf() {
     }
     const semName = { '1': '上', '2': '下' }[state.semester] || '';
     const fname = `習字本_${VERSION_LABELS[state.version] || state.version}_${state.grade}年${semName}${pg}頁.pdf`;
-    // 不用 pdf.save()：內嵌 jsPDF 的 FileSaver 用「未掛進 DOM 的 <a>＋合成
-    // MouseEvent(click)」觸發下載，部分平板 WebView 的 DownloadListener 不會
-    // 攔截（blob URL 尤甚）→ 點了沒反應。改走 AFS 宿主已驗證可行的路徑：
-    // 真實 Blob → <a download> 掛進 document.body → 原生 a.click()。
-    // 極舊 WebView 沒有 Blob/URL API 時退回 data URL。
-    let dataUrl;
-    try {
-      const blob = pdf.output('blob');
-      if (blob && typeof URL !== 'undefined' && URL.createObjectURL) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = fname;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
-      } else {
-        dataUrl = pdf.output('datauristring');
-        throw new Error('no-blob');
-      }
-    } catch (e) {
-      if (!dataUrl) dataUrl = pdf.output('datauristring');
-      const a = document.createElement('a');
-      a.href = dataUrl; a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => a.remove(), 4000);
-    }
-    btn.textContent = '✅ 已下載';
+    // 生成 PDF → base64（記下供「開啟/下載」鈕隨時重試;blob 由 b64 重建,
+    // 大檔不受 data URL 2MB 上限限制）。
+    const dataUrl = pdf.output('datauristring');
+    const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    sheetLastPdf = { b64, fname };
+    const openBtn = $('btnSheetOpen');
+    openBtn.hidden = false;
+    openBtn.textContent = '↗ 開啟／下載';
+    const how = deliverSheetPdf(b64, fname);
+    btn.textContent = how === 'tab' ? '✅ 已開啟 PDF'
+      : how === 'nav' ? '✅ 已開啟 PDF（回鍵返回）'
+      : '✅ 完成・點「開啟/下載」';
   } catch (err) {
     console.error('PDF 產生失敗', err);
     alert('PDF 產生失敗：' + err.message);
@@ -936,6 +996,7 @@ function bind() {
   $('btnSheet').addEventListener('click', openSheet);
   $('btnSheetClose').addEventListener('click', closeSheet);
   $('btnSheetPrint').addEventListener('click', () => sheetPdf());
+  $('btnSheetOpen').addEventListener('click', sheetOpenLast);
   for (const id of ['sheetGrade', 'sheetStroke', 'sheetPinyin', 'sheetDict', 'sheetTrace']) {
     $(id).addEventListener('change', renderSheet);
   }
