@@ -210,8 +210,6 @@ button, select { touch-action: manipulation; }
 .app-update summary { cursor: pointer; padding: 0.5rem 0; }
 .app-update p { margin: 0.4rem 0; overflow-wrap: anywhere; }
 .app-update .btn { font-size: 0.75rem; margin: 0.2rem 0; }
-.pdf-save-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #e8dcc8; }
-.pdf-save-mode select { max-width: 100%; min-height: var(--touch); font: inherit; padding: 0.35rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--card); color: var(--ink); }
 
 /* 中寬（平板直式 720–999px）：標題＋進度＋主鈕一列、篩選器第二列橫排 */
 @media (min-width: 720px) {
@@ -1267,9 +1265,8 @@ main {
   .sheet-page:last-child { page-break-after: auto; break-after: auto; }
 }
 
-/* ── PDF 預覽（App 內展示＋儲存指引）────────────────────────
-   平板瀏覽器（尤其 App 內嵌 WebView）不會自動彈出存檔提示 →
-   生成後直接在 App 內展示 PDF，並給出明確的「儲存到裝置」操作。── */
+/* App 平板預覽：操作列固定在上方，頁面獨立捲動，保留宿主左下安全區。
+   預覽圖片與產生的 PDF 共用，避免 WebView 的 PDF 外開／下載攔截。 */
 .pdf-view {
   position: fixed;
   inset: 0 0 var(--content-bottom) var(--side-w);
@@ -1277,7 +1274,7 @@ main {
   background: #2b2620;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 .pdf-view[hidden] { display: none; }
 .pdf-view-bar {
@@ -1306,13 +1303,17 @@ main {
 }
 .pdf-view-cta {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 0.4rem;
   padding: 0.7rem 1rem 0.5rem;
   padding-bottom: 0.8rem;
   background: #211d18;
   flex-shrink: 0;
+  max-height: 45%;
+  overflow-y: auto;
 }
 .btn-pdf-save {
   font-size: 1.05rem;
@@ -1332,36 +1333,18 @@ main {
   line-height: 1.5;
   text-align: center;
   max-width: 40rem;
+  flex: 1 1 14rem;
 }
-.pdf-view-help b { color: #ffd8a8; }
-.pdf-view-frame iframe.pdf-frame-hidden { display: none; }
-.pdf-view-empty {
-  position: absolute;
-  inset: 0;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  background: #fff;
-  color: var(--muted);
-  font-size: 1.6rem;
-  text-align: center;
-}
-.pdf-view-empty b { font-size: 1.1rem; color: var(--ink); }
-.pdf-view-empty span { font-size: 0.85rem; }
-.pdf-view-frame.pdf-frame-empty .pdf-view-empty { display: flex; }
 .pdf-view-cta .btn-pdf-save { max-width: 100%; }
-.pdf-view-frame {
+.pdf-pages {
   flex: 1;
   min-height: 0;
-  position: relative;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.7rem;
 }
-.pdf-view-frame iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: #fff;
-}
+.pdf-page { width: 100%; max-width: 860px; margin: 0 auto 1rem; }
+.pdf-page figcaption { color: #e8dcc8; text-align: center; font-size: 0.75rem; padding-bottom: 0.4rem; }
+.pdf-page img { display: block; width: 100%; height: auto; background: #fff; border-radius: 0.2rem; }
+.pdf-pages:focus-visible { outline: 3px solid var(--teal); outline-offset: -3px; }

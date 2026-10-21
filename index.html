@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。 -->
-<meta name="app-version" content="2026.10.21.2">
+<meta name="app-version" content="2026.10.21.3">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=37">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
@@ -59,8 +59,8 @@
     <label class="sheet-opt"><input type="checkbox" id="sheetTrace" checked> <span class="lbl">描紅格</span></label>
     <span class="sheet-count" id="sheetCount"></span>
     <button class="btn btn-ghost-btn" id="btnSheetClose">✕ 關閉</button>
-    <button class="btn btn-ghost-btn" id="btnSheetOpen" hidden>↗ 開啟/預覽 PDF</button>
-    <button class="btn btn-accent" id="btnSheetPrint">⬇ 下載 PDF</button>
+    <button class="btn btn-ghost-btn" id="btnSheetOpen" hidden>查看已產生的 PDF</button>
+    <button class="btn btn-accent" id="btnSheetPrint">預覽與儲存</button>
   </div>
   <div class="sheet-scroll" id="sheetScroll"></div>
 </div>
@@ -138,24 +138,17 @@
   </div>
 </div>
 
-<!-- PDF 預覽（App 內展示＋儲存指引;平板瀏覽器不會自動提示存檔,必須在頁面內明確告知） -->
+<!-- App 頁內預覽使用與 PDF 完全相同的頁面圖片，不啟動外部閱讀器。 -->
 <div class="pdf-view" id="pdfView" role="dialog" aria-labelledby="pdfViewName" hidden>
   <div class="pdf-view-bar">
     <span class="pdf-view-name" id="pdfViewName"></span>
-    <button class="btn btn-ghost-btn" id="btnPdfClose">✕ 關閉</button>
+    <button class="btn btn-ghost-btn" id="btnPdfClose">返回習字本</button>
   </div>
   <div class="pdf-view-cta">
-    <label class="pdf-save-mode">使用位置
-      <select id="pdfSaveMode">
-        <option value="app">App 內（不開外部網頁）</option>
-        <option value="browser">Chrome／Safari 瀏覽器</option>
-      </select>
-    </label>
-    <button class="btn btn-accent btn-pdf-save" id="btnPdfSave">⬇ 儲存 PDF</button>
+    <button class="btn btn-accent btn-pdf-save" id="btnPdfSave">儲存到平板</button>
     <div class="pdf-view-help" id="pdfViewHelp" role="status" aria-live="polite"></div>
-    <button class="btn btn-ghost-btn" id="btnPdfNewTab" hidden>↗ 新分頁開啟</button>
   </div>
-  <div class="pdf-view-frame"><iframe id="pdfViewFrame" title="PDF 預覽"></iframe><div class="pdf-view-empty" id="pdfViewEmpty"><b>PDF 已就緒</b><span>請點上方按鈕選擇儲存方式</span></div></div>
+  <div class="pdf-pages" id="pdfPages" role="region" aria-label="PDF 頁面預覽" tabindex="0"></div>
 </div>
 
 <script src="hanzi-writer.min.js?v=1"></script>
@@ -163,7 +156,7 @@
 <script src="dict.js?v=5"></script>
 <script src="jspdf.umd.min.js?v=1"></script>
 <script src="bpmf.js?v=8"></script>
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 <script src="update.js?v=1"></script>
 </body>
 </html>
