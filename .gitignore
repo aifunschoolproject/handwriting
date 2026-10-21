@@ -12,5 +12,9 @@ _*.mp3
 
 # 構建/診斷
 .build/
+
+# 構建依賴與產物（PDF 只進 _site 部署，不進 repo）
+node_modules/
+_site/
 .codegraph/
 codegraph.db*

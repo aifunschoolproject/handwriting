@@ -1,0 +1,17 @@
+{
+  "name": "handwriting-build",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Build pipeline: reproducible fixed-layout worksheet PDFs (Playwright + jsPDF in-page) for GitHub Pages deployment.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build-pdfs.mjs",
+    "build:browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}

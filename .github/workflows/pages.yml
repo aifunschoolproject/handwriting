@@ -1,0 +1,60 @@
+# GitHub Pages（workflow-only 模式）：push main 或手動觸發 → 構建 _site/（網站＋446 份固定習字本 PDF）→ 部署。
+# 本機與 CI 執行同一條命令：npm ci && npx playwright install chromium && npm run build
+name: Build & deploy worksheets site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支只留一個部署 job；後到者取代前一個。
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build _site (website + fixed worksheet PDFs)
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

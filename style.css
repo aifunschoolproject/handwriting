@@ -6,7 +6,7 @@
  *
  * 版面模型（2026-10 整併版，取代舊 landscape≥720px 雙段 override）：
  *   ≥1000px 寬 且 ≥600px 高（--wide 版）：topbar 為左側固定欄，
- *     所有 main/setup/detail/sheet/pdf-view 位於欄右；欄底為宿主
+ *     所有 main/setup/detail/sheet 位於欄右；欄底為宿主
  *     Unity「回去／首頁」按鈕保留 ≥ max(110px,15vh) 安全區，
  *     整個左下安全區不得放任何網頁互動元素。
  *   其餘尺寸（窄螢幕，含橫式手機）：全寬單欄、內容可捲動，
@@ -104,7 +104,6 @@ button, select { touch-action: manipulation; }
   outline-offset: 2px;
   border-radius: 0.4rem;
 }
-.pdf-view :focus-visible { outline-color: #7fd4c5; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -951,7 +950,6 @@ main {
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
-.sheet-title { font-weight: 700; font-size: 1rem; color: var(--green); }
 .sheet-opt {
   display: inline-flex;
   gap: 0.3rem;
@@ -966,6 +964,25 @@ main {
   accent-color: var(--green);
 }
 .sheet-count { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+.sheet-format-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  max-width: 22rem;
+}
+/* 下載＝一般 <a>（同站台相對路徑＋download），大目標、大按鈕樣式。
+   text-decoration none：連結樣式用 .btn 呈現，不用底線。 */
+.btn-sheet-dl {
+  display: inline-block;
+  text-decoration: none;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: center;
+  min-height: var(--touch);
+  white-space: nowrap;
+}
+.btn-sheet-dl:focus-visible { outline-color: #7fd4c5; }
 .sheet-scroll {
   flex: 1;
   overflow: auto;
@@ -1068,7 +1085,7 @@ main {
 .ch-info .i-ex { color: var(--accent); }
 
 /* ══ 寬版：≥1000px 且 ≥600px（桌面/橫平板）══════════════════════
-   topbar 轉為左側固定欄；所有 main/setup/detail/sheet/pdf-view 位於欄右。
+   topbar 轉為左側固定欄；所有 main/setup/detail/sheet 位於欄右。
    欄底為宿主 Unity「回去／首頁」按鈕保留 ≥ max(110px,15vh) 安全區，
    整個左下安全區不放任何網頁互動元素（topbar 內容一律頂對齊堆疊、
    超欄高時向上捲動，可見底緣恒在保留帶之上）。 */
@@ -1216,9 +1233,6 @@ main {
     width: min(100%, calc((100dvh - var(--host-zone-height) - 16.9rem) / 8));
     justify-self: center;
   }
-
-  /* ── PDF 預覽：右移側欄 ── */
-  .pdf-view { left: var(--side-w); }
 }
 
 /* 中寬平板（720–999px）：寫字頁頭部放大、畫布加大 */
@@ -1264,87 +1278,3 @@ main {
   .sheet-page .cell { width: 100%; justify-self: stretch; }
   .sheet-page:last-child { page-break-after: auto; break-after: auto; }
 }
-
-/* App 平板預覽：操作列固定在上方，頁面獨立捲動，保留宿主左下安全區。
-   預覽圖片與產生的 PDF 共用，避免 WebView 的 PDF 外開／下載攔截。 */
-.pdf-view {
-  position: fixed;
-  inset: 0 0 var(--content-bottom) var(--side-w);
-  z-index: 80;
-  background: #2b2620;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.pdf-view[hidden] { display: none; }
-.pdf-view-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.5rem 0.8rem;
-  padding-top: calc(0.5rem + env(safe-area-inset-top));
-  background: #211d18;
-  color: #fff;
-  flex-shrink: 0;
-}
-.pdf-view-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-.pdf-view .btn-ghost-btn {
-  background: #3a342c;
-  color: #fff;
-  border-color: #4a4238;
-}
-.pdf-view-cta {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.7rem 1rem 0.5rem;
-  padding-bottom: 0.8rem;
-  background: #211d18;
-  flex-shrink: 0;
-  max-height: 45%;
-  overflow-y: auto;
-}
-.btn-pdf-save {
-  font-size: 1.05rem;
-  font-weight: 700;
-  padding: 0.7rem 2.2rem;
-  min-height: var(--touch);
-  background: var(--green);
-  border-color: var(--green);
-  color: #fff;
-}
-.btn-pdf-save:disabled { opacity: .6; cursor: default; transform: none; }
-.pdf-view-help.pdf-help-ok { color: #b7f0c8; font-weight: 700; font-size: .9rem; }
-.pdf-view-help.pdf-help-err { color: #ffc9c9; font-weight: 700; }
-.pdf-view-help {
-  color: #e8dcc8;
-  font-size: 0.8rem;
-  line-height: 1.5;
-  text-align: center;
-  max-width: 40rem;
-  flex: 1 1 14rem;
-}
-.pdf-view-cta .btn-pdf-save { max-width: 100%; }
-.pdf-pages {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 0.7rem;
-}
-.pdf-page { width: 100%; max-width: 860px; margin: 0 auto 1rem; }
-.pdf-page figcaption { color: #e8dcc8; text-align: center; font-size: 0.75rem; padding-bottom: 0.4rem; }
-.pdf-page img { display: block; width: 100%; height: auto; background: #fff; border-radius: 0.2rem; }
-.pdf-pages:focus-visible { outline: 3px solid var(--teal); outline-offset: -3px; }
