@@ -2,12 +2,12 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=33">
+<link rel="stylesheet" href="style.css?v=35">
 </head>
-<body>
+<body class="handwriting-app">
 <header class="topbar">
   <h1>✍️ 手寫練習</h1>
   <div class="filters">
@@ -31,18 +31,18 @@
       <select id="selClass"></select>
     </label>
   </div>
-  <div class="fs-ctl" id="fsCtl" role="group" aria-label="介面字號大小">
-    <span class="fs-ctl-label">字號</span>
+  <div class="fs-ctl" id="fsCtl" role="group" aria-label="文字大小">
+    <span class="fs-ctl-label">文字大小</span>
     <button type="button" data-fs="22">正常</button>
     <button type="button" data-fs="26.4">特大</button>
   </div>
-  <div class="progress-pill" id="progressPill" title="本課已練習字數">0/0</div>
+  <div class="progress-pill" id="progressPill" role="status" aria-live="polite" title="本課已練習字數">0/0</div>
   <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
   <button class="btn btn-accent btn-choose" id="btnSheet">📄 習字本</button>
 </header>
 
 <!-- 習字本／學習手冊（列印用） -->
-<div class="sheet" id="sheet" hidden>
+<div class="sheet" id="sheet" role="dialog" aria-label="習字本" hidden>
   <div class="sheet-bar no-print">
     <label class="sheet-opt"><input type="checkbox" id="sheetGrade"> <span class="lbl">整學期</span></label>
     <label class="sheet-opt"><input type="checkbox" id="sheetStroke" checked> <span class="lbl">筆順</span></label>
@@ -58,11 +58,11 @@
 </div>
 
 <!-- 進入引導：大圖卡選 版本／年級／學期／課次，點課卡即練 -->
-<div class="setup" id="setup">
+<div class="setup" id="setup" role="region" aria-labelledby="setupTitle">
   <div class="setup-inner">
     <div class="setup-head">
-      <span class="setup-title">✍️ 手寫練習</span>
-      <span class="setup-sub">先選好 版本、年級、學期、課次，就能練習</span>
+      <span class="setup-title" id="setupTitle" tabindex="-1">今天想練哪一課？</span>
+      <span class="setup-sub">選好版本和年級，再點一張課次卡，就可以開始。</span>
     </div>
     <div class="setup-steps" id="setupSteps"></div>
     <div class="setup-foot">
@@ -74,14 +74,17 @@
 
 <main>
   <div class="grid-head">
-    <button class="btn btn-ghost-btn" id="btnSetup" title="回選課">← 選課</button>
-    <p class="class-note" id="classNote"></p>
+    <div class="grid-intro">
+      <h2>選一個字，開始寫吧</h2>
+      <p class="class-note" id="classNote"></p>
+    </div>
+    <button class="btn btn-ghost-btn" id="btnSetup" title="回選課">換一課</button>
   </div>
   <section class="grid" id="charGrid"></section>
 </main>
 
 <!-- 寫字詳細視窗 -->
-<div class="detail" id="detail" hidden>
+<div class="detail" id="detail" role="dialog" aria-label="寫字練習" hidden>
   <div class="detail-inner">
     <div class="detail-head">
       <div class="detail-word">
@@ -89,8 +92,9 @@
         <div class="detail-zhuyin" id="dZhuYin"></div>
       </div>
       <div class="detail-meta" id="dMeta"></div>
-      <button class="icon-btn" id="btnClose" title="關閉">✕</button>
+      <button class="btn btn-ghost-btn detail-back" id="btnClose" title="返回字卡">返回字卡</button>
     </div>
+    <p class="practice-instruction" id="practiceInstruction" role="status" aria-live="polite">照著淡藍色的字，一筆一筆寫。</p>
 
     <div class="canvas-zone">
       <button class="side-arrow" id="btnPrev" title="上一字" aria-label="上一字">‹</button>
@@ -98,18 +102,25 @@
         <div class="writer-wrap" id="writerWrap">
           <div class="writer-box" id="writerBox"></div>
         </div>
-        <div class="done-flag" id="doneFlag">✔ 已練習</div>
+        <div class="done-flag" id="doneFlag" role="status">完成了！</div>
         <div class="writer-hint" id="writerHint"></div>
       </div>
       <button class="side-arrow" id="btnNext" title="下一字" aria-label="下一字">›</button>
     </div>
 
     <div class="detail-actions">
-      <button class="btn" id="btnAnimate">▶ 筆順動畫</button>
-      <button class="btn btn-accent" id="btnQuiz">✍️ 逐筆練習</button>
-      <button class="btn" id="btnClear">🧽 重來</button>
-      <button class="btn btn-ghost-btn" id="btnGhost" aria-pressed="true">👁 虛影</button>
-      <button class="btn btn-ghost-btn" id="btnGrid" aria-pressed="true">▦ 格線：開</button>
+      <div class="practice-primary">
+        <button class="btn" id="btnAnimate">看筆順</button>
+        <button class="btn btn-accent" id="btnQuiz">自己寫</button>
+        <button class="btn" id="btnClear">再寫一次</button>
+      </div>
+      <details class="practice-settings">
+        <summary>顯示設定</summary>
+        <div class="practice-options">
+          <button class="btn btn-ghost-btn" id="btnGhost" aria-pressed="true">提示字：開</button>
+          <button class="btn btn-ghost-btn" id="btnGrid" aria-pressed="true">格線：開</button>
+        </div>
+      </details>
     </div>
 
     <details class="detail-dict" id="dictBox">
@@ -120,7 +131,7 @@
 </div>
 
 <!-- PDF 預覽（App 內展示＋儲存指引;平板瀏覽器不會自動提示存檔,必須在頁面內明確告知） -->
-<div class="pdf-view" id="pdfView" hidden>
+<div class="pdf-view" id="pdfView" role="dialog" aria-labelledby="pdfViewName" hidden>
   <div class="pdf-view-bar">
     <span class="pdf-view-name" id="pdfViewName"></span>
     <button class="btn btn-ghost-btn" id="btnPdfClose">✕ 關閉</button>
@@ -137,6 +148,7 @@
 <script src="data.js?v=1"></script>
 <script src="dict.js?v=5"></script>
 <script src="jspdf.umd.min.js?v=1"></script>
-<script src="bpmf.js?v=6"></script>
-<script src="app.js?v=34"></script>
+<script src="bpmf.js?v=8"></script>
+<script src="app.js?v=36"></script>
+</body>
 </html>

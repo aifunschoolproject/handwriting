@@ -86,6 +86,7 @@ function markDone(name) {
   refreshProgress();
   refreshCardStates();
   doneFlag.classList.add('show');
+  setInstructionKey('done');
   if (navigator.vibrate) navigator.vibrate(12);
 }
 
@@ -163,6 +164,7 @@ function refreshCardStates() {
   for (const el of grid.querySelectorAll('.char-card')) {
     const isDone = d.has(el.dataset.name);
     el.classList.toggle('done', isDone);
+    el.setAttribute('aria-pressed', String(isDone)); // 字卡＝button，完成狀態同步
     let mark = el.querySelector('.done-mark');
     if (isDone && !mark) {
       mark = document.createElement('span');
@@ -186,18 +188,23 @@ function renderGrid() {
   for (const c of chars) {
     const dc = DICT[c.name];
     const radForm = dc?.radForm || c.radical;
-    const card = document.createElement('div');
+    const card = document.createElement('button');
+    card.type = 'button';
     card.className = 'char-card' + (d.has(c.name) ? ' done' : '');
     card.dataset.name = c.name;
+    const isDone = d.has(c.name);
+    card.setAttribute('aria-pressed', String(isDone));
+    card.setAttribute('aria-label',
+      `字「${c.name}」，注音 ${c.zhuYin}${isDone ? '，已練習' : ''}${c.type === '認讀字' ? '，認讀字' : ''}`);
     card.innerHTML =
-      `<div class="card-body">` +
-      `<span class="zhuyin">${c.zhuYin}</span>` +
+      `<span class="card-body">` +
+      `<span class="zhuyin">${window.bpmfRuby(c.zhuYin)}</span>` +
       `<span class="char">${c.name}</span>` +
-      `</div>` +
+      `</span>` +
       (radForm ? `<span class="rad-badge" title="部首：${dc?.radical || radForm}">${radForm}</span>` : '') +
       `<span class="strokes">${c.fullStroke} 筆</span>` +
       (c.type === '認讀字' ? '<span class="type-tag" title="認讀字（認得即可）">認</span>' : '') +
-      (d.has(c.name) ? '<span class="done-mark">✔</span>' : '');
+      (isDone ? '<span class="done-mark">✔</span>' : '');
     card.addEventListener('click', () => openDetail(c));
     frag.appendChild(card);
   }
@@ -263,6 +270,7 @@ function ensureSvgScale() {
 }
 
 function fallbackStatic(name) {
+  practiceAction++;
   // 套件沒有公開 destroy API；保留唯一 writer 與 SVG，換回有筆順的字時重用。
   if (svgObserver) svgObserver.disconnect();
   if (writer) writer.cancelQuiz();
@@ -276,10 +284,12 @@ function fallbackStatic(name) {
   note.className = 'static-note';
   note.textContent = '此字無筆順動畫，請依範字書寫';
   writerBox.append(glyph, note);
+  setInstruction('這個字沒有筆順，先看著範字練習。');
 }
 // 單一 writer 實例；換字用 setCharacter（自動清手筆＋重載筆順），
 // 避免每次 create 在 document 累積 mouseup/touchend 監聽器。
 let writerPromise = Promise.resolve();
+let practiceAction = 0; // 新操作使舊動畫的非同步回覆失效。
 function ensureWriter(name) {
   writerBox.querySelectorAll('.static-char, .static-note').forEach((el) => el.remove());
   if (!writer) {
@@ -321,6 +331,9 @@ function showWriter(name) {
 
 function startQuiz() {
   if (!writer || writerBox.querySelector('.static-char')) return;
+  practiceAction++;
+  clearTimeout(hintTimer);
+  writerHint.classList.remove('show');
   writer.cancelQuiz();
   writer.quiz({
     onComplete: (summary) => {
@@ -329,13 +342,15 @@ function startQuiz() {
       }
     },
   });
+  setInstructionKey('start');
 }
 
-// 一進寫字畫面即逐筆練習；重來＝重新開始；
-// 筆順動畫＝播放示範，播完筆畫留在畫面（可描摹），要自己寫再按「逐筆練習」或「重來」。
+// 一進寫字畫面即逐筆練習；「自己寫」＝重新開始逐筆；「再寫一次」＝重來；
+// 「看筆順」＝播放示範，播完筆畫留在畫面（可描摹），要自己寫再按「自己寫」。
 function resetWriter() {
-  if (!writer) return;
+  if (!writer || writerBox.querySelector('.static-char')) return;
   startQuiz();
+  setInstructionKey('redo');
 }
 let hintTimer = null;
 function showWriterHint(text) {
@@ -344,25 +359,41 @@ function showWriterHint(text) {
   clearTimeout(hintTimer);
   hintTimer = setTimeout(() => writerHint.classList.remove('show'), 4000);
 }
+// 練習說明（#practiceInstruction）：純文字經 bpmf() 加注音後寫入；
+// 只換內容、不自動跳字（無輪播、無定時切換）。
+const INSTRUCT = {
+  start: '照著淡藍色的字，一筆一筆寫。',
+  redo: '好，一筆一筆自己寫。',
+  animating: '正在看筆順…',
+  animated: '筆順留在畫面上，可沿著描；要自己寫按「自己寫」。',
+  done: '寫完了，很棒！可以換下一個字，或再寫一次。',
+};
+function setInstruction(text) {
+  $('practiceInstruction').innerHTML = bpmf(text);
+}
+function setInstructionKey(k) { setInstruction(INSTRUCT[k]); }
 function playAnimate() {
   if (!writer || writerBox.querySelector('.static-char')) return;
   const name = state.currentName;
+  const action = ++practiceAction;
   writer.cancelQuiz();
+  setInstructionKey('animating');
   writer._withDataPromise
     .catch(() => {})
     .then(() => {
-      if (state.currentName !== name || !writer._character) return;
+      if (practiceAction !== action || state.currentName !== name || !writer._character) return;
       return writer.animateCharacter();
     })
     .then(() => {
-      if (state.currentName !== name) return;
-      showWriterHint('筆順筆畫留在畫面上，可沿著描寫；要自己寫請按「逐筆練習」');
+      if (practiceAction !== action || state.currentName !== name) return;
+      setInstructionKey('animated');
+      showWriterHint('筆順筆畫留在畫面上，可沿著描寫；要自己寫請按「自己寫」');
     });
 }
 
 function setGhost(on) {
   state.ghostOn = on;
-  $('btnGhost').textContent = (on ? '👁 虛影：開' : '👁 虛影：關');
+  $('btnGhost').textContent = (on ? '提示字：開' : '提示字：關');
   $('btnGhost').setAttribute('aria-pressed', String(on));
   if (writer && !writerBox.querySelector('.static-char')) (on ? writer.showOutline() : writer.hideOutline());
 }
@@ -440,16 +471,24 @@ function openDetail(c) {
   state.charIdx = idx;
   const d = DICT[c.name];
   dChar.textContent = c.name;
-  dZhuYin.textContent = c.zhuYin;
+  // 注音＝課本讀音（非辭典第一讀音），右側直排 .z-ruby 結構
+  dZhuYin.innerHTML = window.bpmfRuby(c.zhuYin);
   const radForm = d?.radForm || c.radical;
   const radicalName = d?.radical || c.radical || '';
-  dMeta.innerHTML = bpmf([
-    (idx >= 0 ? `<span class="meta-item">第 ${idx + 1}／${chars.length} 字</span>` : ''),
-    `<span class="meta-item">✍️ ${d?.strokes || c.fullStroke} 畫</span>`,
-    (radForm ? `<span class="meta-item">🔤 部首 ${radForm}${radicalName && radicalName !== radForm ? `（${radicalName}）` : ''}</span>` : ''),
-  ].join(''));
+  // 注音函數只收純文字；HTML 片段組裝完成後再插入
+  dMeta.innerHTML = [
+    (idx >= 0 ? `<span class="meta-item">${bpmf(`第 ${idx + 1}／${chars.length} 字`)}</span>` : ''),
+    `<span class="meta-item">${bpmf('✍️ ')}${d?.strokes || c.fullStroke} ${bpmf('畫')}</span>`,
+    (radForm ? `<span class="meta-item">${bpmf('🔤 部首 ')}${radForm}${radicalName && radicalName !== radForm ? bpmf(`（${radicalName}）`) : ''}</span>` : ''),
+  ].join('');
+  // 視窗打開時焦點移入視窗、不留在被遮的字卡上；關閉時焦點還原字卡（見 closeDetail）
+  const firstOpen = detail.hidden;
   detail.hidden = false;
   document.body.style.overflow = 'hidden';
+  if (firstOpen) {
+    setInstructionKey('start');
+    $('btnClose').focus();
+  }
   // 「已練習」標記隨字更新（完成才顯示，換字不殘留）
   doneFlag.classList.toggle('show', doneSet().has(c.name));
   const atFirst = idx <= 0, atLast = idx < 0 || idx >= chars.length - 1;
@@ -465,6 +504,9 @@ function openDetail(c) {
 }
 
 function closeDetail() {
+  practiceAction++;
+  clearTimeout(hintTimer);
+  writerHint.classList.remove('show');
   const el = grid.querySelector(`.char-card[data-name="${CSS.escape(state.currentName)}"]`);
   // 先取消逐筆練習：避免視窗已關、慢速 onComplete 回調仍標記完成（stale async callback）
   if (writer) writer.cancelQuiz();
@@ -474,7 +516,10 @@ function closeDetail() {
   state.charIdx = null;
   // writer 常駐（setCharacter 會清手筆），僅隱藏視窗
   document.body.style.overflow = '';
-  if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); // 回捲到該字卡
+  if (el) {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' }); // 回捲到該字卡
+    el.focus({ preventScroll: true }); // 焦點還原到字卡，不留在已隱藏視窗內
+  }
   refreshCardStates();
   refreshProgress();
 }
@@ -485,6 +530,7 @@ function stepChar(delta) {
   const chars = courseChars();
   const ni = state.charIdx + delta;
   if (ni < 0 || ni >= chars.length) return;
+  setInstructionKey('start'); // 翻字＝新字，說明回到起步語（startQuiz 同文，不重複觸發）
   openDetail(chars[ni]);
 }
 
@@ -520,10 +566,21 @@ function strokeSvg(name) {
   return svg;
 }
 
+// SVG 預覽與 PDF 共用 1000×1000 格內座標，聲調在右、輕聲在上。
+function sheetRubyMarks(reading) {
+  const { bopo, tone, light } = bpmfParts(reading);
+  const symbols = [...bopo];
+  const top = 500 - (symbols.length - 1) * 150 / 2;
+  const marks = symbols.map((text, i) => ({ text, x: 800, y: top + i * 150 }));
+  if (tone) marks.push({ text: tone, x: 925, y: 500 });
+  if (light) marks.push({ text: light, x: 800, y: top - 140 });
+  return marks;
+}
+
 // 一格：cls='cell-ref' 黑字／'cell-stroke' 紅筆順／'cell-trace' 淡灰描紅／'cell-blank' 空格。
 // 範字／描紅用 SVG 文字（viewBox 0 0 1000 1000），隨格子等比縮放，
 // 手機小格與 A4 大格字體比例一致，不會溢出格子。
-function sheetCell(name, cls) {
+function sheetCell(name, cls, reading = '') {
   const cell = document.createElement('div');
   cell.className = 'cell ' + cls;
   if (cls === 'cell-stroke') {
@@ -535,27 +592,39 @@ function sheetCell(name, cls) {
     svg.setAttribute('viewBox', '0 0 1000 1000');
     svg.setAttribute('aria-hidden', 'true');
     const t = document.createElementNS(SHEET_NS, 'text');
-    t.setAttribute('x', '500');
+    t.setAttribute('x', reading ? '410' : '500');
     t.setAttribute('y', '500');
     t.setAttribute('text-anchor', 'middle');
     t.setAttribute('dominant-baseline', 'central');
     t.classList.add('cell-glyph');
+    if (reading) t.style.fontSize = '580px';
     t.textContent = name;
     svg.appendChild(t);
+    for (const mark of sheetRubyMarks(reading)) {
+      const ruby = document.createElementNS(SHEET_NS, 'text');
+      ruby.setAttribute('x', mark.x);
+      ruby.setAttribute('y', mark.y);
+      ruby.setAttribute('text-anchor', 'middle');
+      ruby.setAttribute('dominant-baseline', 'central');
+      ruby.setAttribute('font-family', 'Bpmf');
+      ruby.setAttribute('font-size', '155');
+      ruby.setAttribute('fill', '#4263eb');
+      ruby.textContent = mark.text;
+      svg.appendChild(ruby);
+    }
     cell.appendChild(svg);
   }
   return cell;
 }
 
 function sheetRow(ch) {
-  const opts = { stroke: $('sheetStroke').checked, trace: $('sheetTrace').checked,
-                 dict: $('sheetDict').checked, pinyin: $('sheetPinyin').checked };
+  const opts = sheetOpts();
   const row = document.createElement('div');
   row.className = 'ch-row';
   // 六格全寬（與 A4 同比例，不縮小）
   const cells = document.createElement('div');
   cells.className = 'ch-cells';
-  cells.append(sheetCell(ch.name, 'cell-ref'));
+  cells.append(sheetCell(ch.name, 'cell-ref', opts.pinyin ? ch.zhuYin : ''));
   cells.appendChild(opts.stroke ? sheetCell(ch.name, 'cell-stroke') : sheetCell('', 'cell-blank'));
   cells.append(opts.trace ? sheetCell(ch.name, 'cell-trace') : sheetCell('', 'cell-blank'),
                sheetCell('', 'cell-blank'), sheetCell('', 'cell-blank'), sheetCell('', 'cell-blank'));
@@ -568,7 +637,6 @@ function sheetRow(ch) {
     const info = document.createElement('div');
     info.className = 'ch-info';
     info.innerHTML =
-      (opts.pinyin ? `<span class="i-zy">${ch.zhuYin}</span>　` : '') +
       `<span class="i-meta">${d?.strokes || ch.fullStroke} 筆` +
       (radForm ? `・部首 ${radForm}` : '') + (ch.type === '認讀字' ? '・認讀字' : '') + '　</span>' +
       (reading?.defs?.[0]?.d ? `<span class="i-def">${reading.defs[0].d}</span>` : '') +
@@ -837,7 +905,7 @@ function drawSheetPage(cv, g) {
   const cw = W - padL - padR;          // 196mm 內容寬（210−2×7）
   const ink = '#33302c', muted = '#8a8378', blue = '#4263eb', accent = '#e8590c';
   const KA = '"TW-Kai","BiauKai","Kaiti TC",serif';
-  const ZY = '"BpmfGenSenRounded","TW-Kai",serif';
+  const ZY = '"Bpmf","TW-Kai",serif';
   const F = (ptv, w) => `${w || 400} ${mm(ptv * PT)}px ${KA}`;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#ffffff';
@@ -900,11 +968,19 @@ function drawSheetPage(cv, g) {
       ctx.strokeStyle = ink; ctx.lineWidth = mm(0.35);
       ctx.strokeRect(cx0 + mm(0.35) / 2, y + mm(0.35) / 2, cellF - mm(0.35), cellF - mm(0.35));
     }
-    // 範字（.cell-glyph：SVG viewBox 1000、640px → cell*0.64、置中）
+    // 範字與右側注音位置和 SVG 預覽共用；關閉注音時範字恢復置中。
+    const rubyMarks = opts.pinyin ? sheetRubyMarks(ch.zhuYin) : [];
     ctx.fillStyle = ink;
-    ctx.font = `400 ${Math.round(cellF * 0.64)}px ${KA}`;
+    ctx.font = `400 ${Math.round(cellF * (rubyMarks.length ? 0.58 : 0.64))}px ${KA}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(ch.name, ox + cellF / 2, y + cellF / 2);
+    ctx.fillText(ch.name, ox + cellF * (rubyMarks.length ? 0.41 : 0.5), y + cellF / 2);
+    if (rubyMarks.length) {
+      ctx.save();
+      ctx.fillStyle = blue;
+      ctx.font = `400 ${cellF * 0.155}px ${ZY}`;
+      for (const mark of rubyMarks) ctx.fillText(mark.text, ox + cellF * mark.x / 1000, y + cellF * mark.y / 1000);
+      ctx.restore();
+    }
     // 筆順（第 2 格：fill 淡紅、無描邊）
     if (opts.stroke) {
       const paths = strokePaths(ch.name);
@@ -945,11 +1021,6 @@ function drawSheetPage(cv, g) {
       const def = reading && reading.defs && reading.defs[0] && reading.defs[0].d;
       const ex = reading && reading.ex ? `例：${reading.ex.split('、')[0]}` : '';
       let ix = ox;
-      if (opts.pinyin) {
-        ctx.fillStyle = blue; ctx.font = `700 ${mm(8 * PT)}px ${ZY}`;
-        ctx.fillText(ch.zhuYin || '', ix, iy);
-        ix += ctx.measureText(ch.zhuYin || '').width + mm(1.6);
-      }
       const meta = `${(d && d.strokes) || ch.fullStroke} 筆` +
         (radForm ? `・部首 ${radForm}` : '') + (ch.type === '認讀字' ? '・認讀字' : '');
       ctx.font = F(6.6);
@@ -987,7 +1058,7 @@ async function sheetPdf() {
     try {
       await Promise.all([
         document.fonts.load('700 15px "TW-Kai"'), document.fonts.load('400 130px "TW-Kai"'),
-        document.fonts.load('400 9px "TW-Kai"'), document.fonts.load('700 10px "BpmfGenSenRounded"'),
+        document.fonts.load('400 9px "TW-Kai"'), document.fonts.load('400 10px "Bpmf"'),
       ]);
     } catch {}
     // 筆順資料（缺字先補抓）
@@ -1057,9 +1128,11 @@ function bind() {
   selSemester.addEventListener('change', onFilterChange);
   selClass.addEventListener('change', () => {
     if (!selClass.value) return;
-    if (state.course !== selClass.value && !detail.hidden) closeDetail(); // 已開字卡屬於舊課
+    const wasDetailOpen = !detail.hidden && state.course !== selClass.value;
+    if (wasDetailOpen) closeDetail(); // 已開字卡屬於舊課
     state.course = selClass.value;
     renderGrid();
+    if (wasDetailOpen) selClass.focus(); // 舊字卡已重建，焦點回到操作中的課次選單
     setupSave();
     if (!$('setup').hidden) renderSetupSteps();
   });
@@ -1165,7 +1238,7 @@ function renderSetupSteps() {
   const step = (label, cards, current, kind) => {
     h += `<div class="setup-step"><div class="setup-step-label">${bpmf(label)}</div><div class="setup-cards">`;
     for (const c of cards) {
-      h += `<button type="button" class="setup-card${c.v === current ? ' on' : ''}" data-k="${kind}" data-v="${c.v}">${c.html}</button>`;
+      h += `<button type="button" class="setup-card${c.v === current ? ' on' : ''}" data-k="${kind}" data-v="${c.v}" aria-pressed="${c.v === current}">${c.html}</button>`;
     }
     h += '</div></div>';
   };
@@ -1176,11 +1249,11 @@ function renderSetupSteps() {
   const sems = semNames(ver, sel.grade);
   if (sems.length > 1) step('學期', sems.map((s) => ({ v: s, html: bpmf(`${s === '1' ? '上' : '下'}學期`) })), sel.semester, 's');
   const cls = ver?.[sel.grade]?.[sel.semester] || {};
-  if (cls['0']) h += `<div class="setup-step"><div class="setup-step-label">${bpmf('課次')}</div><div class="setup-cards"><button type="button" class="setup-card${sel.course === '0' ? ' on' : ''}" data-k="0" data-v="0">${bpmf('特殊單元')}</button></div></div>`;
+  if (cls['0']) h += `<div class="setup-step"><div class="setup-step-label">${bpmf('課次')}</div><div class="setup-cards"><button type="button" class="setup-card${sel.course === '0' ? ' on' : ''}" data-k="0" data-v="0" aria-pressed="${sel.course === '0'}">${bpmf('特殊單元')}</button></div></div>`;
   const nums = Object.keys(cls).filter((k) => k !== '0').map(Number).sort((a, b) => a - b);
   if (nums.length) {
     h += `<div class="setup-step"><div class="setup-step-label">${bpmf('課次（點一下即開始練習）')}</div><div class="setup-cards setup-cards-course">`;
-    for (const i of nums) h += `<button type="button" class="setup-card setup-card-course${sel.course === String(i) ? ' on' : ''}" data-k="${i}" data-v="${i}">${bpmf(`第 ${i} 課`)}</button>`;
+    for (const i of nums) h += `<button type="button" class="setup-card setup-card-course${sel.course === String(i) ? ' on' : ''}" data-k="${i}" data-v="${i}" aria-pressed="${sel.course === String(i)}">${bpmf(`第 ${i} 課`)}</button>`;
     h += '</div></div>';
   }
   stepsBox.innerHTML = h;
@@ -1207,9 +1280,19 @@ function applySel(version, grade, semester, course, startPractice) {
   renderGrid();
   if (!$('setup').hidden) renderSetupSteps();
   setupSave();
-  if (startPractice) $('setup').hidden = true;
+  if (startPractice) {
+    $('setup').hidden = true;
+    document.querySelector('main').scrollTop = 0;
+    grid.querySelector('.char-card')?.focus({ preventScroll: true });
+  }
 }
-function showSetup() { renderSetupSteps(); $('setup').hidden = false; }
+function showSetup() {
+  if (!detail.hidden) closeDetail(); // 選課前先關字卡，避免選課後還留著舊字
+  renderSetupSteps();
+  $('setup').hidden = false;
+  $('setup').scrollTop = 0;
+  $('setupTitle').focus({ preventScroll: true });
+}
 function initSetup() {
   const last = setupLast();
   let v, g, s, c;

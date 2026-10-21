@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=35">
 <style>
   body { max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; }
   h1 { font-size: 24px; text-align: center; margin: 10px 0 6px; }
@@ -22,6 +22,8 @@
   .demo-line { line-height: 2.4; }
   .fs-22 { font-size: 22px; font-weight: 600; }
   .fs-34 { font-size: 34px; font-weight: 700; }
+  .demo-ruby { font-size: 30px; font-weight: 700; font-family: "TW-Kai","BiauKai","Kaiti TC",serif;
+    display: flex; gap: 1.2em; flex-wrap: wrap; }
   .note { color: var(--muted); font-size: 13px; line-height: 1.8; }
   .note code { background: #f4efe6; padding: 1px 5px; border-radius: 4px; }
 </style>
@@ -48,17 +50,24 @@
   <div class="demo-line fs-34" data-text="主角為什麼悶悶不樂？"></div>
 </div>
 
+<div class="demo-card">
+  <h2>單字右側直排（字卡／寫字視窗同款，.z-ruby 結構＋課本音）</h2>
+  <div class="demo-ruby" id="rubyDemo"></div>
+</div>
+
 <div class="demo-card note">
   <h2>技術說明</h2>
   每個字包成 <code>&lt;span class="z-word"&gt;</code>（inline-flex）；注音符號縮成 <code>0.45em</code>
   的<b>直排</b>放在字右側（<code>.z-ruby &gt; .z-bopo</code>），調號 <code>ˊ ˇ ˋ ˙</code> 拆出來
   用 <code>.z-tone</code> 跟符號列底部對齊。注音來源：本機 <code>dict.js</code>（教育部簡編本），
   離線可用，跟 app 的注音是同一套。換排法只需把渲染函數從 <code>bpmfSide()</code> 換成
-  <code>bpmf()</code>。
+  <code>bpmf()</code>。共用 helper：<code>bpmfParts(reading)</code> 純解析回
+  <code>{bopo, tone, light}</code>（空字串回三個空字串）；<code>bpmfRuby(ch, reading)</code>
+  產出 <code>.z-ruby</code> 結構，字卡與寫字視窗都用課本 <code>c.zhuYin</code> 呼叫。
 </div>
 
-<script src="dict.js?v=4"></script>
-<script src="bpmf.js?v=6"></script>
+<script src="dict.js?v=5"></script>
+<script src="bpmf.js?v=8"></script>
 <script>
 'use strict';
 const LINES = [...document.querySelectorAll('.demo-line')];
@@ -72,6 +81,14 @@ document.querySelectorAll('.mode-btn').forEach((b) => {
     render(b.dataset.mode);
   });
 });
+// 單字直排：bpmfParts/bpmfRuby（習字本 SVG/canvas 與字卡右側注音同一套 helper）
+const RUBY_CHARS = [
+  { ch: '重', z: 'ㄔㄨㄥˊ' }, { ch: '語', z: 'ㄩˇ' },
+  { ch: '首', z: 'ㄕㄡˇ' }, { ch: '個', z: '˙ㄍㄜ' },
+  { ch: '我', z: 'ㄨㄛˇ' },
+];
+document.getElementById('rubyDemo').innerHTML = RUBY_CHARS
+  .map(({ ch, z }) => `<span>${ch}${bpmfRuby(z)}</span>`).join('');
 render('side');
 </script>
 </body>

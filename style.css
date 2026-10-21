@@ -1,42 +1,77 @@
-/* ── 手寫練習 ────────────────────────────────────────────
- * 兒童視力友善：所有文字／間距以 rem 表記、根字級由 --fs 驅動
- * （特大 22px 為基準／超大 29px，頂欄「字號」可切、自動記憶），
- * 整個介面隨之等比放大；版面幾何（字卡網格、寫字格）仍隨視窗自適應。
- * 注音字型參考 afs-apsa：自載源泉注音圓體，確保平板呈現一致。
- * ─────────────────────────────────────────────────────── */
+/* ── 手寫練習 ─────────────────────────────────────────────────────────
+ * 兒童友善：所有文字／間距以 rem 表記、根字級由 --fs 驅動
+ * （正常 22px／特大 26.4px，頂欄「文字大小」可切、自動記憶），
+ * 整個介面隨之等比放大；版面幾何（字卡網格、寫字格）隨視口自適應。
+ * 配色：暖白紙張＋深綠/青綠主色＋少量橘色提示。
+ *
+ * 版面模型（2026-10 整併版，取代舊 landscape≥720px 雙段 override）：
+ *   ≥1000px 寬 且 ≥600px 高（--wide 版）：topbar 為左側固定欄，
+ *     所有 main/setup/detail/sheet/pdf-view 位於欄右；欄底為宿主
+ *     Unity「回去／首頁」按鈕保留 ≥ max(110px,15vh) 安全區，
+ *     整個左下安全區不得放任何網頁互動元素。
+ *   其餘尺寸（窄螢幕，含橫式手機）：全寬單欄、內容可捲動，
+ *     底部整條保留 --host-safe-height（max(100px,15vh)）安全帶，
+ *     視口底部不得有被宿主覆蓋的按鈕/內容。
+ * 宿主按鈕尺寸可調參數（85186.jpg 約視口 24% 寬 × 15% 高）：
+ *   --host-safe-width  = 24vw
+ *   --host-safe-height = max(100px, 15vh)
+ *   --host-zone-height = max(110px, 15vh)（側欄底部保留帶）
+ *   --side-w           = min(380px, max(260px, 24vw))
+ *
+ * 注音：字卡與寫字頁頭部皆採「右側直排」（.z-ruby 結構，
+ * 字號約主字 0.34 倍、3 符號約一字高、輕聲在上、調號在右側）；
+ * 介面用字也採旁式；注音使用既有 Bpmf Zihi 字型，避免 1.5 字寬造成間距膨脹。
+ * ─────────────────────────────────────────────────────────────────── */
 :root {
-  --bg: #fdf8f1;
+  /* 紙張 */
+  --bg: #faf7ef;
   --card: #ffffff;
-  --ink: #33302c;
-  --muted: #8a8378;
-  --line: #eadfce;
+  --ink: #2c3a34;
+  --muted: #75806f;
+  --line: #e2e4d8;
+  /* 主色：深綠＋青綠 */
+  --green: #2b6e4f;
+  --teal: #0f7c6c;
+  --green-soft: #e6f0e9;
+  --teal-soft: #e0f1ec;
+  /* 少量橘色提示 */
   --accent: #e8590c;
-  --accent-soft: #fff0e5;
-  --green: #2f9e44;
-  --blue: #4263eb;
+  --accent-soft: #fdf1e7;
+  /* 注音 */
+  --zy: #1f7a8c;
+  /* 習字格線（田字格慣例淡紅，維持） */
+  --cell-line: #f2c4c4;
+  --cell-border: #e0a8a8;
+
   --radius: 0.78rem;
-  --shadow: 0 0.11rem 0.55rem rgba(120, 90, 40, .08);
-  --touch: 2.4rem;
-  /* 宿主 App 的「回去／首頁」按鈕會疊在視口左下角（86px 高＋8px 邊距＝94px）：
-     底部整條保留帶隨視口高度定（11vh），但不得低于 94px——矮橫式視口（如遊戲視窗
-     758px 高）11vh 只有 83px，按鈕會壓到內容。橫式平板各頁面內容一律不進入此帶。 */
-  --app-zone-h: max(11vh, 94px);
+  --shadow: 0 0.11rem 0.55rem rgba(60, 80, 50, .10);
+  --shadow-deep: 0 0.55rem 2.2rem rgba(20, 40, 25, .22);
+  --touch: 2.4rem;            /* ≈53px @22px，主要按鈕 ≥48px */
+
+  /* 宿主 App（Unity）左下角按鈕的安全參數 */
+  --host-safe-width: 24vw;
+  --host-safe-height: max(100px, 15vh);
+  --host-zone-height: max(110px, 15vh);
+  /* --wide（≥1000px 且 ≥600px）時由 media 覆寫為側欄寬 */
+  --side-w: 0px;
+  --content-bottom: calc(var(--host-safe-height) + env(safe-area-inset-bottom));
 }
-/* 根字級＝介面總放大倍率（由 app.js 設定 --fs；預設特大 22px） */
+
+/* 根字級＝介面總放大倍率（由 app.js 設定 --fs；預設正常 22px） */
 html { font-size: var(--fs, 22px); }
 
 /* ── 字型（自載子集，確保各裝置一致）──
    漢字：全字庫正楷體 TW-Kai（CNS11643，OFL-1.1）子集——正楷字形、各裝置一致；
          子集含全課生字＋國語辭典釋義例詞＋介面用字（見 .build/make_font.py）。
-   注音符號：源泉注音圓體 BpmfGenSenRounded（TW-Kai 的注音為日文片假名，不用）。 */
+   注音符號：Bpmf Zihi Only（單字寬，與直排符號格一致）。 */
 @font-face {
   font-family: "TW-Kai";
   src: url("fonts/TW-Kai.woff2") format("woff2");
   font-display: swap;
 }
 @font-face {
-  font-family: "BpmfGenSenRounded";
-  src: url("fonts/BpmfGsr.woff2") format("woff2");
+  font-family: "Bpmf";
+  src: url("fonts/Bpmf.woff2") format("woff2");
   font-display: swap;
 }
 
@@ -53,10 +88,35 @@ body {
   user-select: none;
   overscroll-behavior-y: none;
 }
+.handwriting-app {
+  height: calc(100dvh - var(--content-bottom));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
+button, select, summary, a { -webkit-tap-highlight-color: transparent; }
 button, select { touch-action: manipulation; }
 
-/* ── Top bar ─────────────────────────────── */
+/* ── 鍵盤焦點（所有可操作元素清楚可見）── */
+:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
+}
+.pdf-view :focus-visible { outline-color: #7fd4c5; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Top bar ─────────────────────────────────────────
+   窄版：黏性頂欄（標題＋進度＋兩主鈕，篩選器第二列）；
+   --wide 版：轉為左側固定欄（見檔末 --wide 區塊）。 */
 .topbar {
   position: sticky;
   top: 0;
@@ -70,10 +130,13 @@ button, select { touch-action: manipulation; }
   background: var(--card);
   border-bottom: 1px solid var(--line);
   box-shadow: var(--shadow);
+  flex-shrink: 0;
+  max-height: 42dvh;
+  overflow-y: auto;
 }
-.topbar h1 { font-size: 1.05rem; white-space: nowrap; }
+.topbar h1 { font-size: 1.05rem; white-space: nowrap; font-weight: 800; color: var(--green); }
 
-.filters {
+.topbar .filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
@@ -83,7 +146,7 @@ button, select { touch-action: manipulation; }
 .filter {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.12rem;
   font-size: 0.67rem;
   color: var(--muted);
   flex: 1 1 45%;
@@ -98,161 +161,206 @@ button, select { touch-action: manipulation; }
   border-radius: 0.55rem;
   background: #fff;
   color: var(--ink);
+  font-family: inherit;
 }
-.filter select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filter select:focus-visible { outline: 3px solid var(--teal); outline-offset: 1px; }
 
-/* 字號控制（特大 22px 基準／超大 29px）：整介面等比放大、自動記憶 */
+/* 文字大小切換（正常 22px／特大 26.4px）：整介面等比放大、自動記憶 */
 .fs-ctl {
   display: inline-flex;
   align-items: center;
   gap: 0.15rem;
-  background: var(--accent-soft);
-  border: 1px solid #ffd9c2;
+  background: var(--green-soft);
+  border: 1px solid #cfe0d2;
   border-radius: 999px;
   padding: 0.14rem 0.2rem 0.14rem 0.6rem;
+  flex-shrink: 0;
 }
-.fs-ctl-label { font-size: 0.67rem; color: var(--accent); font-weight: 700; }
+.fs-ctl-label { font-size: 0.67rem; color: var(--green); font-weight: 700; }
 .fs-ctl button {
   border: none;
   background: transparent;
-  color: var(--accent);
+  color: var(--green);
   font-family: inherit;
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1;
+  min-height: 2.2rem;
   padding: 0.42rem 0.55rem;
   border-radius: 999px;
   cursor: pointer;
 }
-.fs-ctl button.on { background: var(--accent); color: #fff; font-weight: 700; }
-.fs-ctl button:active { transform: scale(.94); }
+.fs-ctl button.on { background: var(--green); color: #fff; font-weight: 700; }
 
 .progress-pill {
   margin-left: auto;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--teal-soft);
+  color: var(--teal);
   font-weight: 700;
   font-size: 0.83rem;
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* 平板以上：標題靠左、選課／習字本／進度靠右、篩選器換一列橫排（介面用字不加注音，避免折行重疊） */
+/* 頂欄主按鈕（選課／習字本） */
+.btn-choose { font-size: 0.85rem; padding: 0.4rem 0.85rem; min-height: var(--touch); }
+
+/* 中寬（平板直式 720–999px）：標題＋進度＋主鈕一列、篩選器第二列橫排 */
 @media (min-width: 720px) {
   .topbar { row-gap: 0.4rem; }
   .topbar h1 { font-size: 1.2rem; }
-  .filters { flex: 0 1 auto; order: 4; flex-wrap: nowrap; gap: 0.6rem; }
-  .filter { flex: 0 1 auto; min-width: 4.9rem; font-size: 0.78rem; }
+  .topbar .filters { flex-wrap: nowrap; gap: 0.6rem; }
+  .filter { flex: 1 1 0; min-width: 0; font-size: 0.72rem; }
   .progress-pill { margin-left: 0; }
 }
 
-/* ── 介面用字加注音：上式（注音疊在字上方）── */
+/* ── 介面用字加注音：上式（注音疊在字上方；介面小字用）── */
 .bpmf { display: inline-block; line-height: 1; }
 .bpmf .bpmf-z {
   display: block;
   font-style: normal;
-  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
+  font-family: "Bpmf", "Noto Sans TC", sans-serif;
   font-size: 0.4em;
   line-height: 1;
   letter-spacing: -0.05em;
-  color: var(--blue);
+  color: var(--zy);
   white-space: nowrap;
   text-align: center;
   margin-bottom: 0.12em;
   pointer-events: none;
 }
 
-/* ── 旁式注音：注音符號直排顯示於漢字右側（調號拆開對齊）── */
+/* ── 旁式注音（.z-ruby 結構）：注音符號直排顯示於漢字右側 ──
+   由 bpmfSide()/bpmfRuby() 產生：
+   .z-word > .z-char（本字）＋ .z-ruby（直排小字）
+   .z-ruby > .z-tone-light（輕聲 ˙，最上）＋ .z-main
+   .z-main > .z-bopo（符號直排）＋ .z-tone（聲調，符號列右側）
+   字號 0.34em：3 個符號約主字字高，長注音不擠主字。 */
 .z-word { display: inline-flex; align-items: center; vertical-align: middle; margin: 0 1px; }
 .z-char { font-size: 1em; line-height: 1; }
 .z-ruby {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: 0.45em;
-  margin-left: 1.5px;
-  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
+  justify-content: flex-start;
+  font-size: max(10px, 0.34em);
+  line-height: 0.98;
+  margin-left: 0.28em;
+  font-family: "Bpmf", "Noto Sans TC", sans-serif;
   font-weight: 700;
-  color: var(--blue);
+  color: var(--zy);
+  flex-shrink: 0;
 }
-.z-main { display: flex; flex-direction: row; align-items: center; }
-.z-bopo { display: flex; flex-direction: column; align-items: center; line-height: 0.95; }
+.z-main { display: flex; flex-direction: row; align-items: stretch; }
+.z-bopo { display: flex; flex-direction: column; align-items: center; width: 1em; line-height: 0.95; }
 .z-bopo span { display: block; }
-.z-tone { font-size: 1.15em; margin-left: 1px; line-height: 1; font-weight: 900; }
-.z-tone-light { font-size: 1.1em; line-height: 0.7; margin-bottom: 0; font-weight: 900; }
-
-/* ── Grid ────────────────────────────────── */
+.z-tone {
+  display: flex;
+  align-items: center;
+  font-size: 1em;
+  line-height: 1;
+  font-weight: 900;
+  margin-left: 1px;
+  width: 0.6em;
+  justify-content: center;
+}
+.z-tone-light { font-size: 1.1em; line-height: 0.7; margin-bottom: 0.05em; font-weight: 900; }
+/* ── Grid（字卡頁）────────────────────────────────────
+   寬版 main 以左邊距避開宿主欄；窄版整個應用視口縮短，
+   所有捲動內容都裁在 --host-safe-height 安全帶上方。 */
 main {
-  padding: 0.8rem 0.8rem calc(2.2rem + env(safe-area-inset-bottom));
-  max-width: 1200px;
-  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem;
+  width: 100%;
+  margin: 0;
 }
 .grid-head {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
 }
-.grid-head .btn-ghost-btn {
-  font-size: 0.78rem;
-  padding: 0.35rem 0.7rem;
-  min-height: 2.1rem;
-  flex-shrink: 0;
-}
+.grid-head .grid-intro { flex: 1 1 auto; min-width: 0; }
+.grid-head h2 { font-size: 1.12rem; font-weight: 800; color: var(--green); }
 .class-note {
   color: var(--muted);
-  font-size: 0.78rem;
-  margin: 0;
+  font-size: 0.8rem;
+  margin: 0.15rem 0 0;
+}
+.grid-head .btn-ghost-btn {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.85rem;
+  min-height: var(--touch);
+  flex-shrink: 0;
 }
 
+/* 字卡網格：窄手機 2 欄、中手機 3 欄、平板 4 欄起、--wide 版 auto-fill */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(4.9rem, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
   container: grid / inline-size;
 }
+@media (min-width: 560px) {
+  .grid { grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+}
+@media (min-width: 720px) {
+  .grid { grid-template-columns: repeat(4, 1fr); gap: 0.7rem; }
+}
 
+/* 字卡：田字格＋本字＋右側直排注音；角上留 認/✔/部首/筆數 徽章 */
 .char-card {
   position: relative;
   aspect-ratio: 1;
   background-color: var(--card);
   background-image:
-    linear-gradient(to right, transparent calc(50% - 1px), #f2c4c4 calc(50% - 1px), #f2c4c4 calc(50% + 1px), transparent calc(50% + 1px)),
-    linear-gradient(to bottom, transparent calc(50% - 1px), #f2c4c4 calc(50% - 1px), #f2c4c4 calc(50% + 1px), transparent calc(50% + 1px)),
-    linear-gradient(to top right, transparent 49.7%, #f2c4c4 49.7%, #f2c4c4 50.3%, transparent 50.3%),
-    linear-gradient(to bottom left, transparent 49.7%, #f2c4c4 49.7%, #f2c4c4 50.3%, transparent 50.3%);
-  border: 2px solid #e8a0a0;
+    linear-gradient(to right, transparent calc(50% - 1px), var(--cell-line) calc(50% - 1px), var(--cell-line) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(to bottom, transparent calc(50% - 1px), var(--cell-line) calc(50% - 1px), var(--cell-line) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(to top right, transparent 49.7%, var(--cell-line) 49.7%, var(--cell-line) 50.3%, transparent 50.3%),
+    linear-gradient(to bottom left, transparent 49.7%, var(--cell-line) 49.7%, var(--cell-line) 50.3%, transparent 50.3%);
+  border: 2px solid var(--cell-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform .12s, box-shadow .12s;
+  transition: transform .12s, box-shadow .12s, border-color .12s;
 }
-.char-card .char {
-  font-size: clamp(2.3rem, 10vw, 3.2rem);
-  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
-  color: #555;
-}
-/* 注音：本字正上方一列（教科書田字格慣例，不佔角落、長注音不折行）。
-   卡片為 flex 欄：.card-body（注音＋本字）置中，角上留 部首/筆數/認 徽章。 */
+.char-card:active { transform: scale(.98); }
+/* 本字＋右側注音同置中：.card-body 橫排（字左、注音右），注音不擠字。
+   容器字號＝本字字號 → .z-ruby 的 0.34em 即主字×0.34（3 符號約一字高）。 */
 .char-card .card-body {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 0.18em;
+  justify-content: center;
+  gap: 0.08em;
+  max-width: 100%;
+  padding: 0 0.35rem;
+  font-size: min(2.75rem, 15vw);
 }
+.char-card .char {
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
+  order: 1;
+  color: #555;
+  line-height: 1;
+}
+/* 右側直排注音容器：內放 .z-word（.z-char 本字＋.z-ruby 直排小字） */
 .char-card .zhuyin {
-  font-size: 0.92rem;
-  font-weight: 600;
-  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
-  color: var(--blue);
+  display: flex;
+  order: 2;
+  align-items: center;
+  font-size: inherit;
+  color: var(--zy);
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
-  letter-spacing: 0.01em;
 }
 .char-card .rad-badge {
   position: absolute;
@@ -260,9 +368,9 @@ main {
   left: 0.33rem;
   font-size: 0.72rem;
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
-  color: #c2410c;
-  background: #fff3ea;
-  border: 1px solid #ffd9c2;
+  color: var(--green);
+  background: var(--green-soft);
+  border: 1px solid #cfe0d2;
   border-radius: 0.4rem;
   padding: 0 0.35rem;
   line-height: 1.5;
@@ -296,8 +404,8 @@ main {
 
 .char-card .type-tag,
 .detail-meta .type-tag {
-  background: #fff4d6;
-  color: #b0851a;
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 0.61rem;
   font-weight: 700;
   padding: 0.05rem 0.35rem;
@@ -309,102 +417,110 @@ main {
   right: 1.8rem;
 }
 
-/* 窄手機：字卡放寬為 2 欄（注音放得下、字更大更利閱讀） */
-@media (max-width: 419px) {
-  .grid { grid-template-columns: repeat(2, 1fr); gap: 0.55rem; }
-}
-/* 中等手機：3 欄 */
-@media (min-width: 420px) and (max-width: 559px) {
-  .grid { grid-template-columns: repeat(3, 1fr); gap: 0.55rem; }
-}
-
-/* ── Detail overlay ──────────────────────── */
+/* ── Detail 寫字視窗 ─────────────────────────────────
+   窄版（預設）：全螢幕、單欄可捲動；頂部資訊列（返回鈕＋大字＋右側注音＋
+   元資料），說明句，大正方形畫布，主操作三鈕直排、顯示設定折疊在最下。
+   窄版浮層底緣由 --content-bottom 限定，避免捲動內容進入宿主按鈕區。
+   --wide 版（≥1000px 且 ≥600px）：右側大畫布欄（見檔末）。 */
 .detail {
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--content-bottom) var(--side-w);
   z-index: 50;
-  background: rgba(60, 45, 20, .45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.9rem;
-  padding: 0.9rem calc(0.9rem + env(safe-area-inset-right)) calc(0.9rem + env(safe-area-inset-bottom)) calc(0.9rem + env(safe-area-inset-left));
+  background: rgba(25, 40, 30, .45);
 }
 .detail[hidden] { display: none; }
 
 .detail-inner {
-  background: var(--card);
-  border-radius: 1.1rem;
-  box-shadow: 0 0.55rem 2.2rem rgba(0,0,0,.25);
-  width: 100%;
-  max-width: 640px;
-  max-height: 100%;
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0.9rem 1rem 1.1rem;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(0.7rem + env(safe-area-inset-top))
+           calc(0.85rem + env(safe-area-inset-right))
+           0.85rem
+           calc(0.85rem + env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
 }
+.detail-inner > * { flex-shrink: 0; }
 
+/* 頂部資訊列：返回鈕（文字按鈕，容納 4 字）＋大字＋右側注音＋元資料 */
 .detail-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  gap: 0.7rem;
   flex-wrap: wrap;
-  gap: 0.65rem;
 }
-.detail-word { display: flex; flex-direction: column; }
-.detail-char {
-  font-size: 3.3rem;
+.detail-word {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  font-size: 3.1rem;
   line-height: 1.1;
-  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
 }
+.detail-char {
+  font-size: 1em;
+  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
+  color: #444;
+}
+/* 右側直排注音容器（#dZhuYin 內 .z-word/.z-ruby 結構）：
+   繼承 .detail-word 字號 → .z-ruby 0.34em＝主字×0.34；注音在字右、不擠字 */
 .detail-zhuyin {
-  color: var(--blue);
-  font-size: 1.05rem;
-  margin-top: 0.22rem;
-  white-space: nowrap;
-  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
-  font-weight: 500;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  font-size: inherit;
 }
 .detail-meta {
   flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 0.22rem;
+  flex-wrap: wrap;
+  gap: 0.3rem;
   font-size: 0.78rem;
   color: var(--muted);
-  padding-top: 0.45rem;
   min-width: 0;
 }
 .detail-meta b { color: var(--ink); font-size: 0.83rem; }
 .detail-meta .meta-tag { color: var(--accent); }
-
-.icon-btn {
-  border: none;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.95rem;
-  width: var(--touch);
-  height: var(--touch);
-  border-radius: 50%;
-  cursor: pointer;
-  flex-shrink: 0;
+.detail-back {
+  margin-left: auto;
+  min-width: 5.4rem;
+  font-size: 0.9rem;
+  flex-basis: 100%;
+  order: -1;
+  font-weight: 600;
 }
-.icon-btn:active { transform: scale(.92); }
 
-/* ── 畫布區（左右課次箭頭）── */
+/* 練習說明句（#practiceInstruction，位於 canvas-zone 之前） */
+.practice-instruction {
+  margin: 0.55rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--teal);
+  background: var(--teal-soft);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+}
+
+/* 畫布區（左右換字箭頭＋大正方形田字格） */
 .canvas-zone {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
-  margin: 0.9rem auto 0.25rem;
+  margin: 0.8rem auto;
+  width: 100%;
   max-width: 640px;
+  flex: 0 0 auto;
 }
 .canvas-stack {
   position: relative;
-  /* 寬度以「卡片可用寬」為準（100%），再用 520px 上限；
-     舊式 min(88vw,…) 以視口為準，橫式平板 88vw 會超出 640px 卡片 → 蓋住標題與關閉鈕 */
-  width: min(100%, 520px);
-  margin: 0 auto;
+  width: min(100%, 62dvh, 520px);
   min-width: 0;
 }
 .side-arrow {
@@ -412,31 +528,33 @@ main {
   height: var(--touch);
   border-radius: 50%;
   border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink);
+  background: var(--card);
+  color: var(--green);
   font-size: 1.45rem;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
+  transition: transform .12s, background .12s;
 }
-.side-arrow:active { transform: scale(.92); background: var(--accent-soft); }
+.side-arrow:active { transform: scale(.92); background: var(--green-soft); }
 .side-arrow:disabled { opacity: .35; pointer-events: none; }
 
 .writer-wrap {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  border: 3px solid #e8a0a0;
+  border: 3px solid var(--cell-border);
   border-radius: 0.55rem;
   overflow: hidden;
   touch-action: none;
   background-color: #fffdf9;
   background-image:
-    linear-gradient(to right, transparent calc(50% - 1.5px), #f2c4c4 calc(50% - 1.5px), #f2c4c4 calc(50% + 1.5px), transparent calc(50% + 1.5px)),
-    linear-gradient(to bottom, transparent calc(50% - 1.5px), #f2c4c4 calc(50% - 1.5px), #f2c4c4 calc(50% + 1.5px), transparent calc(50% + 1.5px)),
-    linear-gradient(to top right, transparent 49.8%, #f2c4c4 49.8%, #f2c4c4 50.2%, transparent 50.2%),
-    linear-gradient(to bottom left, transparent 49.8%, #f2c4c4 49.8%, #f2c4c4 50.2%, transparent 50.2%);
+    linear-gradient(to right, transparent calc(50% - 1.5px), var(--cell-line) calc(50% - 1.5px), var(--cell-line) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 1.5px), var(--cell-line) calc(50% - 1.5px), var(--cell-line) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+    linear-gradient(to top right, transparent 49.8%, var(--cell-line) 49.8%, var(--cell-line) 50.2%, transparent 50.2%),
+    linear-gradient(to bottom left, transparent 49.8%, var(--cell-line) 49.8%, var(--cell-line) 50.2%, transparent 50.2%);
   background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  box-shadow: var(--shadow);
 }
 .writer-wrap.no-grid {
   border-color: var(--line);
@@ -489,7 +607,7 @@ main {
   transform: translateX(-50%);
   z-index: 2;
   max-width: 94%;
-  background: rgba(93, 71, 43, 0.88);
+  background: rgba(43, 110, 79, 0.88);
   color: #fff;
   font-size: 0.72rem;
   line-height: 1.4;
@@ -502,25 +620,31 @@ main {
 }
 .writer-hint.show { opacity: 1; }
 
-/* ── 按鈕列 ──────────────────────────────── */
+/* ── 操作列：.practice-primary 3 主鈕＋顯示設定折疊 ──
+   窄版：三主鈕直排（全寬大鈕）、details 折疊於下；
+   --wide 版：整列移至左欄（見檔末）。 */
 .detail-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.55rem;
-  justify-content: center;
-  margin-top: 0.8rem;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 640px;
 }
 .btn {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
-  font-size: 0.89rem;
+  font-size: 0.95rem;
+  font-weight: 600;
   min-height: var(--touch);
   padding: 0.55rem 1rem;
-  border-radius: 0.67rem;
+  border-radius: 0.7rem;
   cursor: pointer;
+  transition: transform .1s, background .12s, border-color .12s;
+  font-family: inherit;
 }
-.btn:active { transform: scale(.96); }
+.btn:active { transform: scale(.97); }
 .btn-sm {
   font-size: 1.2rem;
   min-height: var(--touch);
@@ -535,24 +659,88 @@ main {
   color: #fff;
   font-weight: 700;
 }
+/* 主要三鈕：大、清楚、綠底白字為主（「自己寫」為橘色強調） */
+.practice-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.practice-primary .btn {
+  min-height: var(--touch);
+  font-size: 1.1rem;
+  font-weight: 700;
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.practice-primary .btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* 顯示設定：次要兩鈕（提示字/格線）折疊 */
+.practice-settings {
+  border: 1px dashed var(--line);
+  border-radius: 0.7rem;
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 255, 255, .5);
+}
+.practice-settings summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+  min-height: 2.4rem;
+  display: flex;
+  align-items: center;
+}
+.practice-settings summary::-webkit-details-marker { display: none; }
+.practice-settings summary::before { content: "▸ "; }
+.practice-settings[open] summary::before { content: "▾ "; }
+.practice-options {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding-top: 0.35rem;
+}
+.practice-options .btn {
+  flex: 1 1 auto;
+  min-width: 5.3rem;
+  min-height: 2.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.btn-ghost-btn { background: transparent; }
 .btn-ghost-btn[aria-pressed="true"] {
-  background: #edf2ff;
-  border-color: #4263eb;
-  color: #4263eb;
+  background: var(--teal-soft);
+  border-color: var(--teal);
+  color: var(--teal);
   font-weight: 700;
 }
 
-/* ── 簡編本字典（預設折疊）── */
+/* 矮橫式（<600px 高，如橫放手機）：單欄可捲動、字畫布縮小 */
+@media (max-height: 500px) {
+  .detail-word { font-size: 2.2rem; }
+  .detail-inner {
+    padding-top: calc(0.5rem + env(safe-area-inset-top));
+  }
+  .canvas-zone { margin: 0.4rem auto; flex: 0 1 auto; }
+  .canvas-stack { width: min(100%, 46dvh, 340px); }
+  .practice-primary .btn { min-height: 2.5rem; font-size: 0.95rem; }
+}
+
+/* ── 簡編本字典（預設折疊；寫字頁最下）── */
 .detail-dict {
   margin-top: 0.9rem;
   border-top: 1px dashed var(--line);
   padding-top: 0.55rem;
 }
 .detail-dict summary {
-  font-size: 0.78rem;
-  color: var(--muted);
+  font-size: 0.83rem;
+  color: var(--green);
+  font-weight: 700;
   cursor: pointer;
-  min-height: 2.2rem;
+  min-height: 2.4rem;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -564,13 +752,13 @@ main {
    content-visibility:hidden，body 會留下不繪製的 layout 盒、造成虛幻捲動） */
 .detail-dict:not([open]) .dict-body { display: none; }
 .detail-dict[open] summary::before { content: "▾ "; }
-.dict-body { margin-top: 0.55rem; font-size: 0.83rem; line-height: 1.7; }
+.dict-body { margin-top: 0.55rem; font-size: 0.85rem; line-height: 1.7; }
 .dict-rad {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  background: #fff7f2;
-  border: 1px solid #ffe3d3;
+  background: var(--green-soft);
+  border: 1px solid #cfe0d2;
   border-radius: 0.55rem;
   padding: 0.4rem 0.55rem;
   margin-bottom: 0.55rem;
@@ -578,24 +766,24 @@ main {
 .dict-rad-chip {
   font-size: 1.35rem;
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
-  color: #c2410c;
+  color: var(--green);
   background: #fff;
-  border: 1px solid #ffd9c2;
+  border: 1px solid #cfe0d2;
   border-radius: 0.45rem;
   padding: 0.05rem 0.55rem;
   min-width: 2.45rem;
   text-align: center;
 }
-.dict-rad-text { color: var(--ink); font-size: 0.78rem; }
+.dict-rad-text { color: var(--ink); font-size: 0.82rem; }
 .dict-readings { display: flex; flex-direction: column; gap: 0.5rem; }
 .dict-reading-group {
-  background: #f8f5ff;
-  border: 1px solid #e5e0f7;
+  background: #f6f8f3;
+  border: 1px solid #dde3d6;
   border-radius: 0.55rem;
   padding: 0.4rem 0.6rem;
 }
 .dict-reading-group.is-book {
-  background: #fff6ef;
+  background: var(--accent-soft);
   border-color: var(--accent);
 }
 .dict-reading {
@@ -607,8 +795,8 @@ main {
 .dict-zy {
   font-size: 1rem;
   font-weight: 500;
-  font-family: "BpmfGenSenRounded", "Noto Sans TC", sans-serif;
-  color: var(--blue);
+  font-family: "Bpmf", "Noto Sans TC", sans-serif;
+  color: var(--zy);
   white-space: nowrap;
 }
 .book-tag {
@@ -621,196 +809,35 @@ main {
   white-space: nowrap;
 }
 .dict-ex-inline {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--accent);
   margin-left: 0.2rem;
 }
-.dict-defs { margin: 0.4rem 0 0; padding-left: 1.1rem; color: var(--ink); font-size: 0.82rem; }
+.dict-defs { margin: 0.4rem 0 0; padding-left: 1.1rem; color: var(--ink); font-size: 0.84rem; }
 .dict-defs li { margin-bottom: 0.3rem; line-height: 1.55; }
 .dict-ex { color: var(--muted); font-size: 0.78rem; margin-left: 0.35rem; }
 .dict-none { color: var(--muted); }
 .meta-item {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--muted);
-  background: #faf7f2;
+  background: #fff;
   border: 1px solid var(--line);
   border-radius: 0.45rem;
-  padding: 0.1rem 0.5rem;
+  padding: 0.12rem 0.5rem;
   white-space: nowrap;
 }
 
-/* ── 平板（≥720px）：放大字卡、柔化田字格線、放大詳細視窗字 ── */
-@media (min-width: 720px) {
-  .grid { grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: 0.78rem; }
-  .char-card .char { font-size: 2.9rem; }
-  .char-card .strokes { font-size: 0.67rem; }
-  .char-card {
-    background-image:
-      linear-gradient(to right, transparent calc(50% - 1px), #f8d4d4 calc(50% - 1px), #f8d4d4 calc(50% + 1px), transparent calc(50% + 1px)),
-      linear-gradient(to bottom, transparent calc(50% - 1px), #f8d4d4 calc(50% - 1px), #f8d4d4 calc(50% + 1px), transparent calc(50% + 1px)),
-      linear-gradient(to top right, transparent 49.7%, #f8d4d4 49.7%, #f8d4d4 50.3%, transparent 50.3%),
-      linear-gradient(to bottom left, transparent 49.7%, #f8d4d4 49.7%, #f8d4d4 50.3%, transparent 50.3%);
-  }
-  .detail { padding: 1.1rem; }
-  /* 全高直排：畫布吃掉剩餘高度、面板不捲動、字典可捲 */
-  .detail-inner {
-    max-width: 720px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .detail-head { flex-shrink: 0; }
-  .canvas-zone { flex: 1; min-height: 0; margin: 0.55rem auto; align-content: center; }
-  .canvas-stack { width: min(88vw, 560px, 100%); }
-  .detail-actions { flex-shrink: 0; }
-  .detail-dict { flex-shrink: 0; }
-  .dict-body { max-height: 26vh; overflow-y: auto; }
-  .detail-char { font-size: 4.1rem; }
-  .detail-zhuyin { font-size: 1.22rem; }
-}
-
-
-/* ── 橫式平板（寬且有足夠高度）：全螢幕左右兩欄，充分利用寬螢幕——
-   左欄：標題（‹返回、大字、✕）＋APP 式操作大鈕直排＋國語辭典（均欄內捲動）；
-   右欄：跨全高的大寫字畫布（邊長隨視口高度定，橫式高度才是瓶頸）；
-   底部（尤其左下角）預留空間給宿主 App 的跳轉／操控按鈕。
-   矮畫面（<600px，如橫式手機）不適用：改用下方單欄＋矮畫面規則。── */
-@media (orientation: landscape) and (min-width: 720px) and (min-height: 600px) {
-  /* 橫式 App 側欄寬（左固定）：所有浮層／內容區右移此寬 */
-  html { --side-w: clamp(272px, 22vw, 330px); }
-  .detail { padding: 0; inset: 0 0 0 var(--side-w); }
-  .detail-inner {
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    max-height: none;
-    border-radius: 0;
-    box-shadow: none;
-    /* 特大字號時頭部＋按鈕列吃掉幾乎全部欄高：1fr 行若 min 為 0 會被壓到 0px、
-       字典裁切又無法捲動（內層 overflow 被 .detail-inner 的 clip 擋住）。
-       字典行保證 ≥3.4rem（summary 恒可見可點、欄內可捲），整欄必要時隨容器捲動 */
-    overflow-y: auto; overflow-x: clip;
-    overscroll-behavior: contain;
-    display: grid;
-    grid-template-columns: clamp(292px, 24vw, 360px) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, auto) minmax(3.4rem, 1fr);
-    gap: 0.5rem 0.9rem;
-    padding: calc(0.9rem + env(safe-area-inset-top))
-             calc(1rem + env(safe-area-inset-right))
-             calc(var(--app-zone-h) + env(safe-area-inset-bottom))
-             1.1rem;
-  }
-  /* 左欄：標題 → 操作按鈕 → 字典（字典吃剩餘高度、欄內捲動，不會延伸到左下角） */
-  .detail-head { grid-column: 1; grid-row: 1; }
-  /* APP 式操作鈕：整寬大鈕直排左對齊（平板好按） */
-  .detail-actions {
-    grid-column: 1; grid-row: 2;
-    margin-top: 0;
-    min-height: 0;
-    overflow-y: auto; overflow-x: clip;
-    overscroll-behavior: contain;
-    display: flex; flex-direction: column; gap: 0.55rem;
-  }
-  .detail-actions .btn {
-    min-width: 0; min-height: 3.1rem;
-    font-size: 1.08rem; font-weight: 600;
-    padding: 0.6rem 0.95rem;
-    border-radius: 0.72rem;
-    display: flex; align-items: center; gap: 0.45rem;
-    justify-content: flex-start;
-  }
-  /* 換課箭頭與返回／關閉鈕放大 */
-  .side-arrow { width: 3rem; height: 3rem; font-size: 1.75rem; }
-  .detail-head .icon-btn { width: 2.9rem; height: 2.9rem; font-size: 1.15rem; }
-  /* 字典：grid 第 3 列（minmax(0,1fr)、有確定高度）本身當捲動容器。
-     不用 <details> 上的 display:flex——受其 shadow slot 影響無法約束子元素，
-     正文會越出保留帶。改為整個 <details> 在欄內捲動、閉合盒一併裁掉。 */
-  .detail-dict {
-    grid-column: 1; grid-row: 3;
-    margin: 0.25rem 0 1.4rem;
-    min-height: 0;
-    display: block;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-  .detail-dict .dict-body { max-height: none; overflow: visible; }
-  /* 右欄：大畫布跨全高；正方形邊長＝min(欄寬, 視口高－頂欄與底部預留) */
-  .canvas-zone {
-    grid-column: 2; grid-row: 1 / -1;
-    margin: 0; max-width: none; min-height: 0;
-    align-content: center;
-  }
-  .canvas-stack { width: min(100%, calc(100dvh - var(--app-zone-h) - 1.4rem)); }
-  .detail-char { font-size: 4rem; }
-  .detail-zhuyin { font-size: 1.25rem; }
-}
-
-/* ── 手機（直式）：全螢幕寫字畫面 ────────── */
-@media (max-width: 719px) {
-  .detail { padding: 0; background: var(--card); }
-  .detail-inner {
-    max-width: none;
-    height: 100dvh;
-    border-radius: 0;
-    box-shadow: none;
-    display: flex;
-    flex-direction: column;
-    padding: calc(0.55rem + env(safe-area-inset-top)) calc(0.67rem + env(safe-area-inset-right)) calc(0.55rem + env(safe-area-inset-bottom)) calc(0.67rem + env(safe-area-inset-left));
-  }
-  .detail-head { flex-shrink: 0; }
-  .detail-word { flex: 0 1 auto; min-width: 0; }
-  .detail-meta { order: 3; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; padding-top: 0.22rem; gap: 0.22rem; align-items: center; font-size: 0.67rem; }
-  .detail-char { font-size: 2.45rem; }
-  .meta-item { font-size: 0.67rem; padding: 0.1rem 0.4rem; white-space: normal; }
-
-  .canvas-zone {
-    margin: 0.45rem 0 0;
-    flex: 1;
-    align-content: center;
-    min-height: 0;
-    gap: 0.35rem;
-  }
-  .canvas-stack { width: min(100%, 62dvh, 460px); max-width: none; }
-  .side-arrow { width: 2.2rem; height: 2.2rem; font-size: 1.22rem; }
-
-  .detail-actions { flex-shrink: 0; gap: 0.45rem; }
-  .detail-actions .btn { flex: 1; min-width: 5.3rem; padding: 0.55rem 0.35rem; font-size: 0.83rem; }
-
-  .detail-dict { flex-shrink: 0; }
-  .dict-body { max-height: 52vh; overflow-y: auto; }
-}
-
-/* ── 矮畫面（橫式手機/平板）：縮小字與畫布 ──── */
-@media (max-height: 500px) {
-  .detail-inner {
-    display: flex;
-    flex-direction: column;
-    max-height: 100%;
-  }
-  .detail-head { align-items: center; gap: 0.45rem; flex-shrink: 0; }
-  .detail-char { font-size: 1.9rem; }
-  .detail-zhuyin { font-size: 0.83rem; margin-top: 0; }
-  .detail-meta { padding-top: 0; }
-  .canvas-zone { flex-shrink: 0; }
-  .canvas-stack { width: min(44vh, 36vw, 320px); }
-  .detail-actions { flex-shrink: 0; gap: 0.35rem; }
-  .detail-actions .btn { flex: 1; min-width: 0; min-height: 2rem; padding: 0.33rem 0.25rem; font-size: 0.72rem; }
-  .detail-dict { flex-shrink: 0; }
-  .detail-dict summary { min-height: 1.9rem; }
-  .dict-body { max-height: 40vh; }
-}
-
-/* ── 進入引導（大圖卡選課）── */
+/* ── 進入引導（大圖卡選課；全螢幕浮層）── */
 .setup {
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--content-bottom) var(--side-w);
   z-index: 60;
   background: var(--bg);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: calc(1.1rem + env(safe-area-inset-top)) 0.9rem calc(1.55rem + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+  padding: calc(1.1rem + env(safe-area-inset-top)) 0.9rem 1.1rem;
 }
 .setup[hidden] { display: none; }
 .setup-inner { max-width: 760px; margin: 0 auto; }
@@ -818,19 +845,21 @@ main {
 .setup-title {
   display: block;
   font-size: 1.45rem;
-  font-weight: 700;
+  font-weight: 800;
+  color: var(--green);
   margin-bottom: 0.45rem;
 }
+.setup-title:focus { outline: none; }
 .setup-sub {
   display: block;
   color: var(--muted);
-  font-size: 0.83rem;
+  font-size: 0.85rem;
 }
-.setup-step { margin-bottom: 0.78rem; }
+.setup-step { margin-bottom: 0.85rem; }
 .setup-step-label {
   color: var(--muted);
-  font-size: 0.72rem;
-  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.45rem;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -848,25 +877,27 @@ main {
   border-radius: var(--radius);
   background: var(--card);
   color: var(--ink);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-family: inherit;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex-direction: row;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: transform .12s, border-color .12s, background .12s;
 }
 .setup-card:active { transform: scale(.97); }
 .setup-card.on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green);
   font-weight: 700;
 }
-.setup-card-course { min-height: 4.45rem; font-size: 1.05rem; }
+.setup-card-course { min-height: 3.2rem; font-size: 0.95rem; }
+.setup-card[data-k="0"] { grid-column: 1 / -1; }
 .setup-foot {
   display: flex;
   align-items: center;
@@ -877,24 +908,33 @@ main {
   padding-top: 0.9rem;
   border-top: 1px dashed var(--line);
 }
-.setup-summary { color: var(--muted); font-size: 0.83rem; flex: 1 1 11rem; }
-.setup-foot .btn { font-size: 1rem; padding: 0.67rem 1.45rem; }
-.btn-choose { font-size: 0.78rem; padding: 0.35rem 0.65rem; min-height: 2.1rem; }
+.setup-summary { color: var(--muted); font-size: 0.85rem; flex: 1 1 11rem; }
+.setup-foot .btn {
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0.67rem 1.45rem;
+  min-height: 3rem;
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
 @media (max-width: 480px) {
   .setup-cards { grid-template-columns: repeat(auto-fill, minmax(5.3rem, 1fr)); }
   .setup-card { min-height: 3.3rem; font-size: 0.83rem; padding: 0.45rem; }
   .setup-card-course { min-height: 3.7rem; font-size: 0.89rem; }
 }
-/* ── 習字本／學習手冊（列印用）──────────────
- * 螢幕：.sheet 全螢幕浮層，A4 預覽等比縮放；
- * 列印：@media print 只印 .sheet-page（A4、每課一頁）。 */
+
+/* ── 習字本／學習手冊（全螢幕浮層；A4 預覽等比、可捲動）──
+   列印樣式見檔末 @media print（只印 .sheet-page）。 */
 .sheet {
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--content-bottom) var(--side-w);
   z-index: 70;
   background: #d8d2c8;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  left: var(--side-w);
 }
 .sheet[hidden] { display: none; }
 .sheet-bar {
@@ -905,8 +945,9 @@ main {
   padding: 0.5rem 0.9rem;
   background: var(--card);
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
 }
-.sheet-title { font-weight: 700; font-size: 1rem; }
+.sheet-title { font-weight: 700; font-size: 1rem; color: var(--green); }
 .sheet-opt {
   display: inline-flex;
   gap: 0.3rem;
@@ -915,12 +956,18 @@ main {
   cursor: pointer;
   white-space: nowrap;
 }
-.sheet-opt input { width: 1.05rem; height: 1.05rem; }
+.sheet-opt input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--green);
+}
 .sheet-count { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
 .sheet-scroll {
   flex: 1;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 1rem;
+  min-height: 6rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -991,7 +1038,8 @@ main {
     linear-gradient(to bottom, transparent calc(50% - 0.25mm), #e8b4b4 calc(50% - 0.25mm), #e8b4b4 calc(50% + 0.25mm), transparent calc(50% + 0.25mm));
 }
 .cell svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* 範字／描紅：SVG 文字隨格等比 */
+/* 範字／描紅：SVG 文字隨格等比（字體規則維持原樣；
+   範字格內右側直排注音由 app.js 以 inline SVG attrs 設定） */
 .cell-glyph {
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   font-size: 640px;
@@ -1011,131 +1059,191 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ch-info .i-zy { font-size: 8pt; color: var(--blue); font-weight: 700; }
+.ch-info .i-zy { font-size: 8pt; color: var(--zy); font-weight: 700; }
 .ch-info .i-meta { font-size: 6.8pt; color: var(--muted); }
 .ch-info .i-ex { color: var(--accent); }
-/* ── 橫式平板（寬且有足夠高度）：其餘頁面同樣全螢幕、充分利用寬度，
-   底部（尤其左下角）預留空間給宿主 App 的跳轉／操控按鈕。── */
-@media (orientation: landscape) and (min-width: 720px) and (min-height: 600px) {
-  /* ── App 側欄：topbar 由頂欄轉為左側固定欄（所有頁共用；
-     z-index 90 蓋過浮層，setup/detail/sheet 與 main 皆右移 --side-w）── */
+
+/* ══ 寬版：≥1000px 且 ≥600px（桌面/橫平板）══════════════════════
+   topbar 轉為左側固定欄；所有 main/setup/detail/sheet/pdf-view 位於欄右。
+   欄底為宿主 Unity「回去／首頁」按鈕保留 ≥ max(110px,15vh) 安全區，
+   整個左下安全區不放任何網頁互動元素（topbar 內容一律頂對齊堆疊、
+   超欄高時向上捲動，可見底緣恒在保留帶之上）。 */
+@media (min-width: 1000px) and (min-height: 600px) {
+  :root { --side-w: min(380px, max(260px, var(--host-safe-width))); --content-bottom: 0px; }
+
+  /* ── 左側固定欄（由 topbar 轉化；z-index 90 蓋過各浮層）── */
   .topbar {
     position: fixed;
-    top: 0; left: 0; bottom: 0;
+    top: 0; left: 0; bottom: calc(var(--host-zone-height) + env(safe-area-inset-bottom));
     width: var(--side-w);
+    max-height: none;
     z-index: 90;
-    display: flex;
     flex-direction: column;
-    align-items: stretch;
     flex-wrap: nowrap;
+    align-items: stretch;
     gap: 0.4rem;
-    /* 全部控制項左上緊湊堆疊（標題→選單→字號→進度→主按鈕），左下角不放任何按鈕元素；
-       內容超欄高時（如超大字號）整欄向上捲動，可見底緣恒在保留帶之上 */
     overflow-y: auto;
     overflow-x: clip;
     overscroll-behavior: contain;
-    padding: calc(0.8rem + env(safe-area-inset-top)) 0.85rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+    padding: calc(0.8rem + env(safe-area-inset-top)) 0.85rem 0.8rem;
     border-bottom: none;
     border-right: 1px solid var(--line);
+    box-shadow: 0.15rem 0 0.6rem rgba(60, 80, 50, .06);
   }
-  .topbar h1 { font-size: 1.15rem; font-weight: 800; }
-  .topbar .filters { flex: none; flex-direction: column; gap: 0.4rem; order: 0; }
+  .topbar h1 { font-size: 1.15rem; }
+  .topbar .filters {
+    flex: none;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    order: 0;
+  }
   .topbar .filter { flex: none; }
   .topbar .fs-ctl, .topbar .progress-pill { flex-shrink: 0; }
   .topbar .progress-pill { margin-left: 0; width: max-content; }
   .topbar .btn-choose {
-    width: 100%; min-height: 2.5rem;
-    font-size: 1rem; font-weight: 700;
-    padding: 0.45rem 0.85rem; border-radius: 0.7rem;
-    display: flex; align-items: center; gap: 0.5rem;
+    width: 100%;
+    min-height: 2.6rem;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0.45rem 0.85rem;
+    border-radius: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
   }
-  /* 矮橫式（高≤820，如旋轉手機/遊戲視窗）：篩選區改 2×2 網格收高度，
-     讓全部控制項（含主按鈕）不捲動就落在保留帶之上 */
+  .topbar .btn-choose.btn-ghost-btn {
+    background: var(--card);
+    color: var(--green);
+    border-color: var(--line);
+  }
+  /* 矮橫式（≤820px 高）：篩選區 2×2 收高度，全部控制項不捲動即落在保留帶上 */
   @media (max-height: 820px) {
     .topbar .filters { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
   }
 
-  /* 字卡頁：右移側欄、取消 1200px 限寬、卡片加寬（約 5–11 欄隨視口） */
-  main {
-    max-width: none;
-    padding: 0.8rem 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom)) calc(var(--side-w) + 1.1rem);
-  }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(7.4rem, 1fr)); gap: 0.85rem; }
-  .char-card .char { font-size: 3.3rem; }
+  /* ── 字卡頁：右移側欄、不限寬、卡片加大 ── */
+  main { width: calc(100% - var(--side-w)); margin-left: var(--side-w); padding: 1.1rem; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(6.9rem, 1fr)); gap: 0.8rem; }
+  .char-card .card-body { font-size: min(2.9rem, 5.5vw); }
 
-  /* 選課：右移側欄；左欄＝步驟卡片（版本／年級／學期／課次），
-     右欄＝總結＋開始練習按鈕（置底），左下角因此保持空著 */
+  /* ── 選課：右移側欄；步驟卡左、總結＋開始鈕右置底（左下空出）── */
   .setup {
-    left: var(--side-w);
-    padding: calc(1.1rem + env(safe-area-inset-top)) 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
-    overflow: hidden;
+    padding: calc(1.1rem + env(safe-area-inset-top)) 1.1rem 1.1rem;
+    overflow-y: auto;
   }
-  .setup-inner {
-    max-width: none;
-    height: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 0.6rem 1.6rem;
-    overflow: clip;
-  }
-  .setup-head { grid-column: 1 / -1; text-align: left; margin-bottom: 0.2rem; }
-  .setup-steps { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: clip; overscroll-behavior: contain; padding-right: 0.3rem; }
-  .setup-cards { grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); }
-  .setup-foot {
-    grid-column: 2; grid-row: 2; align-self: end;
-    flex-direction: column; align-items: stretch;
-    margin-top: 0; padding-top: 0; border-top: none;
-    gap: 0.7rem;
-  }
-  .setup-summary { flex: none; }
-  .setup-foot .btn { font-size: 1.2rem; padding: 0.95rem 1.2rem; min-height: 3.6rem; border-radius: 0.8rem; font-weight: 700; }
+  .setup-inner { max-width: 1050px; margin: 0 auto; }
+  .setup-head { text-align: left; margin-bottom: 1rem; }
+  .setup-cards { grid-template-columns: repeat(auto-fit, minmax(5.4rem, 1fr)); }
+  .setup-card { min-height: 3.1rem; padding: 0.5rem; }
+  .setup-foot { align-items: center; gap: 1rem; }
+  .setup-foot .btn { min-height: 3rem; }
 
-  /* 習字本：右移側欄；橫式一列並排兩頁 A4（維持 190:266 比例），充分利用寬螢幕。
-     用 flex-wrap（不用 grid）：grid 的 auto 列對 aspect-ratio 子項量高時寬度未定、
-     行軌道崩縮到最小內容高，多頁時頁與頁重疊；flex 先定寬再由比例定高，行行堆疊 */
-  .sheet { left: var(--side-w); }
-  .pdf-view.pdf-view { inset: 0 0 0 var(--side-w); }
+  /* ── 寫字頁：右側大正方形畫布；左欄＝資訊＋說明＋操作＋字典（欄內捲動）──
+     右側區域完整使用高度；宿主按鈕由左側保留區隔離，不壓縮畫布。 */
+  .detail { background: rgba(25, 40, 30, .40); }
+  .detail-inner {
+    left: 0;
+    display: grid;
+    grid-template-columns: minmax(230px, 30%) minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "head   right"
+      "inst   right"
+      "act    right"
+      "dict   right";
+    gap: 0.5rem 1.1rem;
+    align-content: start;
+    overflow-y: auto;
+    overflow-x: clip;
+    overscroll-behavior: contain;
+    padding: calc(0.8rem + env(safe-area-inset-top))
+             calc(1.1rem + env(safe-area-inset-right))
+             1.1rem
+             1.1rem;
+  }
+  .detail-head { grid-area: head; }
+  .practice-instruction { grid-area: inst; margin: 0.3rem 0 0; }
+  .detail-actions { grid-area: act; margin-top: 0.55rem; }
+  .detail-dict { grid-area: dict; margin-top: 0.6rem; }
+  .dict-body { max-height: 20vh; overflow-y: auto; }
+  .canvas-zone {
+    grid-area: right;
+    margin: 0;
+    max-width: none;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+  }
+  /* 大正方形畫布：邊長＝min(欄寬, 視口高−頂/底保留−箭頭餘裕) */
+  .canvas-stack {
+    width: min(100%, calc(100dvh - var(--host-zone-height) - 2.6rem));
+    margin: 0 auto;
+  }
+  .side-arrow { width: 3rem; height: 3rem; font-size: 1.75rem; }
+  .detail-word { font-size: 3.6rem; }
+  /* 操作列在左欄：三主鈕直排大鈕 */
+  .practice-primary .btn { min-height: var(--touch); font-size: 1.05rem; }
+
+  /* ── 習字本：右移側欄；一列並排兩頁 A4（190:266 比例）──
+     用 flex-wrap：grid auto 列對 aspect-ratio 子項量高時寬度未定會崩縮；
+     頁面寬＝min(半欄, 可用高×比例) → 整頁不壓左下保留帶 */
   .sheet-scroll {
-    display: flex;
     flex-direction: row;
     flex-wrap: wrap;
     align-content: flex-start;
     justify-content: center;
     gap: 1rem;
-    padding: 1rem 1.1rem calc(var(--app-zone-h) + env(safe-area-inset-bottom));
+    padding: 1rem 1.1rem calc(var(--host-zone-height) + env(safe-area-inset-bottom));
   }
-  /* 一列兩頁並排，各頁維持 A4 比例(190/266)；
-     寬度＝min(半欄, 可用高×比例)，可用高＝視口高－工具列(≈3.6rem)－上下padding(≈2rem)－底部保留帶
-     → 頁面高度天然受限、整頁不與左下角按鈕重疊 */
   .sheet-page {
-    width: min(calc((100% - 1rem) / 2), calc((100dvh - var(--app-zone-h) - 5.6rem) * 190 / 266));
+    width: min(calc((100% - 1rem) / 2), calc((100dvh - var(--host-zone-height) - 5.6rem) * 190 / 266));
     flex: none;
     min-height: 0;
     aspect-ratio: 190 / 266;
   }
-  /* 一頁 8 字在矮橫式視口（如遊戲視窗 ≈758px 高）放不下全寬格子：
-     表頭/內距/註解為固定 mm・pt、不隨頁縮，每列＝格子＋列距＋註解。
+  /* 一頁 8 字在矮橫式視口（≈758px 高）放不下全寬格子：
+     表頭/內距/註解為固定 mm・pt 不隨頁縮；每列＝格子＋列距＋註解。
      格子寬＝min(軌道寬, 每列可用高)；每列可用高＝
-     （視口高－保留帶－工具列 5.6rem－表頭＋頁內距＋8×列距註解 11.3rem）÷8。
-     置中於軌道、不裁切不越頁、不壓左下角按鈕；高視口時 100% 較小、無影響。
-     必須給明確 width（僅 justify-self:center 會取內容寬 0；% 對 1fr 軌道可解析、無循環）。
+     （視口高−保留帶−工具列 5.6rem−表頭＋頁內距＋8×列距註解 11.3rem）÷8。
      列印走 @media print，不受影響 */
   .sheet-page .cell {
-    width: min(100%, calc((100dvh - var(--app-zone-h) - 16.9rem) / 8));
+    width: min(100%, calc((100dvh - var(--host-zone-height) - 16.9rem) / 8));
     justify-self: center;
   }
+
+  /* ── PDF 預覽：右移側欄 ── */
+  .pdf-view { left: var(--side-w); }
 }
 
-/* 列印：只印習字本（A4、每課一頁）。
-   舊式 body * { visibility: hidden }＋.sheet 固定浮層：手機瀏覽器會把多頁內容
-   裁切成一視口高（iOS 尤甚）。改用 display 隱藏其餘元素＋.sheet 常態流內，
-   手機與桌面的「列印／儲存 PDF」皆可正常跨頁。 */
+/* 中寬平板（720–999px）：寫字頁頭部放大、畫布加大 */
+@media (min-width: 720px) and (max-width: 999px) {
+  .detail-word { font-size: 3.6rem; }
+  .detail-meta { font-size: 0.85rem; }
+  .canvas-stack { width: min(100%, 66dvh, 560px); }
+  .practice-primary .btn { min-height: 3.2rem; font-size: 1.15rem; }
+}
+
+/* 手機主要操作並排，避免必須滑過三個大按鈕才能換模式。 */
+@media (max-width: 719px) {
+  .detail-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 0.5rem; }
+  .detail-back { grid-column: 2; grid-row: 1; min-height: 44px; font-size: 0.78rem; padding: 0.3rem 0.6rem; }
+  .detail-word { grid-column: 1; grid-row: 1 / span 2; font-size: 2.8rem; }
+  .detail-meta { grid-column: 2; font-size: 0.72rem; }
+  .practice-instruction { font-size: 0.82rem; }
+  .practice-primary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
+  .practice-primary .btn { font-size: 0.8rem; padding: 0.4rem 0.15rem; }
+}
+
+/* ══ 列印：只印習字本（A4、每課一頁）════════════════════════════
+   display 隱藏其餘元素＋.sheet 常態流內：手機與桌面的「列印／儲存 PDF」
+   皆可正常跨頁（舊式 visibility:hidden＋固定浮層會被裁切成一視口高）。 */
 @media print {
   @page { size: A4; margin: 10mm 9mm; }
-  body { background: #fff; }
+  body, .handwriting-app { background: #fff; height: auto; display: block; overflow: visible; }
   body > *:not(.sheet) { display: none !important; }
-  .sheet { position: static; display: block; background: #fff; overflow: visible; }
+  .sheet { position: static; display: block; background: #fff; overflow: visible; left: 0; }
   .sheet-bar, .no-print { display: none !important; }
   .sheet-scroll { overflow: visible; padding: 0; background: #fff; display: block; }
   .sheet-page {
@@ -1148,21 +1256,22 @@ main {
     break-after: page;
     padding: 4mm 3mm 4mm;
   }
-  /* 橫式列印時 landscape 媒體查詢仍命中、格子會縮小：復原全寬（A4 縱向 8 列放得下） */
+  /* 寬版 media 可能仍命中、格子會縮小：復原全寬（A4 縱向 8 列放得下） */
   .sheet-page .cell { width: 100%; justify-self: stretch; }
   .sheet-page:last-child { page-break-after: auto; break-after: auto; }
 }
 
-/* ── PDF 預覽（App 內展示＋儲存指引）────────────────────
+/* ── PDF 預覽（App 內展示＋儲存指引）────────────────────────
    平板瀏覽器（尤其 App 內嵌 WebView）不會自動彈出存檔提示 →
-   生成後直接在 App 內展示 PDF,並給出明確的「儲存到裝置」操作。── */
+   生成後直接在 App 內展示 PDF，並給出明確的「儲存到裝置」操作。── */
 .pdf-view {
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--content-bottom) var(--side-w);
   z-index: 80;
   background: #2b2620;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 .pdf-view[hidden] { display: none; }
 .pdf-view-bar {
@@ -1173,6 +1282,7 @@ main {
   padding-top: calc(0.5rem + env(safe-area-inset-top));
   background: #211d18;
   color: #fff;
+  flex-shrink: 0;
 }
 .pdf-view-name {
   font-size: 0.85rem;
@@ -1194,13 +1304,18 @@ main {
   align-items: center;
   gap: 0.4rem;
   padding: 0.7rem 1rem 0.5rem;
+  padding-bottom: 0.8rem;
   background: #211d18;
+  flex-shrink: 0;
 }
 .btn-pdf-save {
   font-size: 1.05rem;
   font-weight: 700;
   padding: 0.7rem 2.2rem;
   min-height: var(--touch);
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
 }
 .btn-pdf-save:disabled { opacity: .6; cursor: default; transform: none; }
 .pdf-view-help.pdf-help-ok { color: #b7f0c8; font-weight: 700; font-size: .9rem; }
