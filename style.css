@@ -206,6 +206,12 @@ button, select { touch-action: manipulation; }
 
 /* 頂欄主按鈕（選課／習字本） */
 .btn-choose { font-size: 0.85rem; padding: 0.4rem 0.85rem; min-height: var(--touch); }
+.app-update { width: 100%; font-size: 0.75rem; color: var(--muted); }
+.app-update summary { cursor: pointer; padding: 0.5rem 0; }
+.app-update p { margin: 0.4rem 0; overflow-wrap: anywhere; }
+.app-update .btn { font-size: 0.75rem; margin: 0.2rem 0; }
+.pdf-save-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #e8dcc8; }
+.pdf-save-mode select { max-width: 100%; min-height: var(--touch); font: inherit; padding: 0.35rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--card); color: var(--ink); }
 
 /* 中寬（平板直式 720–999px）：標題＋進度＋主鈕一列、篩選器第二列橫排 */
 @media (min-width: 720px) {

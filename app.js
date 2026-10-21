@@ -708,36 +708,59 @@ function closeSheet() {
 }
 const isIOSBrowser = () => /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1); // iPadOS 13+ 偽裝 Mac
-const isAndroidWebView = () => Boolean(window.vuplex) ||
-  (/Android/i.test(navigator.userAgent) && /;\s*wv\b|Version\/4\.0/i.test(navigator.userAgent));
+// UA 無法可靠辨識偽裝成 Chrome 的宿主；觸控裝置預設 App 模式，
+// 只有使用者明確選擇瀏覽器，才允許 blob 導航。已辨識的宿主不允許切換。
+const isEmbeddedWebView = () => Boolean(window.vuplex) || window.top !== window.self ||
+  /Vuplex|Unity|;\s*wv\b/i.test(navigator.userAgent) ||
+  (/Android/i.test(navigator.userAgent) && /Version\/4\.0/i.test(navigator.userAgent)) ||
+  (isIOSBrowser() && !/Safari\//i.test(navigator.userAgent) && !navigator.standalone);
+const isAppPdfMode = () => isEmbeddedWebView() || $('pdfSaveMode').value === 'app';
+$('pdfSaveMode').value = isEmbeddedWebView() || isIOSBrowser() ||
+  /Android/i.test(navigator.userAgent) || navigator.maxTouchPoints > 0 ? 'app' : 'browser';
+let pdfShareFile = null;
+function canSharePdf() {
+  try {
+    return Boolean(pdfShareFile && navigator.share && navigator.canShare?.({ files: [pdfShareFile] }));
+  } catch { return false; }
+}
 const b64ToPdfBlob = (b64) => {
   const bin = atob(b64), len = bin.length;
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: 'application/pdf' });
 };
-// App 僅走原生橋接；一般瀏覽器才使用 blob 下載，兩者不得互相降級。
-const canRenderPdfIframe = () => isIOSBrowser() && !isAndroidWebView();
+// App 模式不開 blob iframe／分頁，也不把存檔失敗降級為外部導航。
+const canRenderPdfIframe = () => isIOSBrowser() && !isAppPdfMode();
 function showPdfViewer(b64, fname) {
   resetPdfSave();
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
-  pdfBlobUrl = URL.createObjectURL(b64ToPdfBlob(b64));
+  const blob = b64ToPdfBlob(b64);
+  pdfShareFile = new File([blob], fname, { type: 'application/pdf' });
+  $('pdfSaveMode').disabled = isEmbeddedWebView();
   const frame = $('pdfViewFrame');
   const renderable = canRenderPdfIframe();
   frame.classList.toggle('pdf-frame-hidden', !renderable);
   $('pdfViewFrame').parentElement.classList.toggle('pdf-frame-empty', !renderable);
-  if (renderable) frame.src = pdfBlobUrl;
+  if (renderable) {
+    pdfBlobUrl = URL.createObjectURL(blob);
+    frame.src = pdfBlobUrl;
+  } else {
+    frame.src = 'about:blank';
+  }
   const MB = (b64.length * 3 / 4 / 1048576).toFixed(1);
   $('pdfViewName').textContent = fname + `（${MB} MB）`;
-  if (isAndroidWebView()) {
-    setPdfSaveStatus('點「儲存 PDF」交由目前的容器處理；是否可存檔取決於容器提供的下載功能。', '');
-  } else if (isIOSBrowser()) {
-    setPdfSaveStatus('可點「儲存 PDF」下載，或從 PDF 預覽的分享選單選擇「儲存到檔案」。', '');
+  const share = canSharePdf() && typeof window.vuplex?.postMessage !== 'function' &&
+    (isAppPdfMode() || typeof window.showSaveFilePicker !== 'function');
+  $('btnPdfSave').textContent = share ? '分享／儲存 PDF' : '儲存 PDF';
+  if (share) {
+    setPdfSaveStatus('開啟系統分享選單；請選擇「儲存到檔案」或裝置提供的存檔目的地。', '');
+  } else if (isAppPdfMode()) {
+    setPdfSaveStatus('App 內只使用宿主存檔功能，不會開啟外部網頁。若目前是在 Chrome／Safari，請先切換上方「使用位置」。', '');
   } else {
-    setPdfSaveStatus('點「儲存 PDF」開始下載；儲存位置依瀏覽器設定。', '');
+    setPdfSaveStatus('點「儲存 PDF」選擇位置或開始瀏覽器下載。', '');
   }
   $('btnPdfSave').hidden = false;
-  $('btnPdfNewTab').hidden = renderable || isAndroidWebView();
+  $('btnPdfNewTab').hidden = renderable || isAppPdfMode();
   $('pdfView').hidden = false;
   document.body.style.overflow = 'hidden';
 }
@@ -746,6 +769,7 @@ function closePdfViewer() {
   $('pdfView').hidden = true;
   $('pdfViewFrame').src = 'about:blank';
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
+  pdfShareFile = null;
   if ($('sheet').hidden) document.body.style.overflow = '';
 }
 // 沿用既有容器協定：送 { type: 'save', name, b64 }，回覆 { ok: boolean }。
@@ -759,6 +783,7 @@ function resetPdfSave() {
   pdfSaveRequest = null;
   if (pdfBridgeCleanup) pdfBridgeCleanup();
   $('btnPdfSave').disabled = false;
+  $('pdfSaveMode').disabled = isEmbeddedWebView();
 }
 function setPdfSaveStatus(text, kind) { // kind: ''|'ok'|'err'
   const el = $('pdfViewHelp');
@@ -766,19 +791,63 @@ function setPdfSaveStatus(text, kind) { // kind: ''|'ok'|'err'
   el.classList.toggle('pdf-help-ok', kind === 'ok');
   el.classList.toggle('pdf-help-err', kind === 'err');
 }
-function savePdfToDevice() {
+async function savePdfToDevice() {
   if (!sheetLastPdf || pdfSaveRequest) return;
   const { b64, fname } = sheetLastPdf;
-  if (isAndroidWebView()) {
+  // 必須在這次點擊內啟動系統 UI，不能等橋接逾時後才呼叫（會失去使用者手勢）。
+  if (typeof window.vuplex?.postMessage !== 'function' &&
+      ((!isAppPdfMode() && typeof window.showSaveFilePicker === 'function') || canSharePdf())) {
     const request = { sent: false };
     pdfSaveRequest = request;
     $('btnPdfSave').disabled = true;
+    $('pdfSaveMode').disabled = true;
+    try {
+      let message;
+      let kind = '';
+      if (!isAppPdfMode() && typeof window.showSaveFilePicker === 'function') {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fname,
+          types: [{ description: 'PDF 文件', accept: { 'application/pdf': ['.pdf'] } }],
+        });
+        const writable = await handle.createWritable();
+        try {
+          await writable.write(b64ToPdfBlob(b64));
+          await writable.close();
+        } catch (error) {
+          try { await writable.abort(); } catch { /* 保留原始寫檔錯誤 */ }
+          throw error;
+        }
+        message = 'PDF 已儲存到你選擇的位置。';
+        kind = 'ok';
+      } else {
+        await navigator.share({ files: [pdfShareFile], title: fname });
+        message = '已交給系統分享；請到你選擇的目的地確認檔案。';
+      }
+      if (pdfSaveRequest === request) {
+        resetPdfSave();
+        setPdfSaveStatus(message, kind);
+      }
+    } catch (error) {
+      if (pdfSaveRequest === request) {
+        resetPdfSave();
+        setPdfSaveStatus(error.name === 'AbortError' ? '已取消，PDF 仍可重新儲存。'
+          : '系統未能儲存或分享檔案。請確認裝置權限與可用空間；不會自動開啟外部網頁。',
+        error.name === 'AbortError' ? '' : 'err');
+      }
+    }
+    return;
+  }
+  if (isAppPdfMode()) {
+    const request = { sent: false };
+    pdfSaveRequest = request;
+    $('btnPdfSave').disabled = true;
+    $('pdfSaveMode').disabled = true;
     setPdfSaveStatus('正在連接 App 儲存功能…', '');
     const send = () => {
       if (pdfSaveRequest !== request || request.sent || typeof window.vuplex?.postMessage !== 'function') return;
       if (pdfBridgeCleanup) pdfBridgeCleanup();
       clearTimeout(pdfSaveTimer);
-      setPdfSaveStatus('正在存進「下載」資料夾…', '');
+      setPdfSaveStatus('已交給 App，正在等待實際存檔結果…', '');
       pdfSaveTimer = setTimeout(() => {
         resetPdfSave();
         setPdfSaveStatus('尚未收到容器的存檔結果，無法確認是否成功。請先檢查「下載」資料夾。', 'err');
@@ -799,7 +868,7 @@ function savePdfToDevice() {
     };
     pdfSaveTimer = setTimeout(() => {
       resetPdfSave();
-      setPdfSaveStatus('目前容器未提供可用的儲存橋接；網頁無法直接寫入裝置資料夾，也不會自動跳出 App。', 'err');
+      setPdfSaveStatus('目前 App 沒有提供可用的存檔橋接或系統檔案分享。網頁無法自行寫入裝置；請由 App 提供存檔功能，或在 Chrome／Safari 開啟本網頁後選擇瀏覽器下載。', 'err');
     }, 3000);
     send();
     return;
@@ -825,12 +894,12 @@ window.hwSaveAck = (result) => {
   if (!pdfSaveRequest?.sent || typeof result?.ok !== 'boolean') return;
   resetPdfSave();
   setPdfSaveStatus(result.ok
-    ? '已存到「下載」資料夾'
+    ? 'App 已回報 PDF 儲存成功。'
     : 'App 存檔失敗，請重試並檢查裝置儲存空間。', result.ok ? 'ok' : 'err');
 };
 // 只有一般瀏覽器可開新分頁；blob 避免大型 data URL 導航遭攔截。
 function openPdfNewTab() {
-  if (!sheetLastPdf || isAndroidWebView()) return;
+  if (!sheetLastPdf || isAppPdfMode()) return;
   const href = URL.createObjectURL(b64ToPdfBlob(sheetLastPdf.b64));
   const link = document.createElement('a');
   link.href = href;
@@ -848,7 +917,7 @@ function sheetOpenLast() {
 }
 
 /* ── 習字本 PDF：canvas 繪製頁面後以 JPEG 嵌入 jsPDF，字形不依賴閱讀器字型。
- * App 經 SaveMessageRouter 寫入公開下載；瀏覽器使用 blob 下載或預覽。
+ * App 須提供既有 save 橋接或系統檔案分享；瀏覽器依能力使用選檔儲存或 blob 下載。
  * 尺寸：mm → px 固定 8（1mm＝8px），1680×2376px＝A4。 */
 function sheetOpts() {
   return { stroke: $('sheetStroke').checked, trace: $('sheetTrace').checked,
@@ -1180,6 +1249,15 @@ function bind() {
   $('btnPdfClose').addEventListener('click', closePdfViewer);
   $('btnPdfSave').addEventListener('click', savePdfToDevice);
   $('btnPdfNewTab').addEventListener('click', openPdfNewTab);
+  $('pdfSaveMode').addEventListener('change', () => {
+    if (sheetLastPdf) showPdfViewer(sheetLastPdf.b64, sheetLastPdf.fname);
+  });
+  window.addEventListener('vuplexready', () => {
+    $('pdfSaveMode').value = 'app';
+    $('pdfSaveMode').disabled = true;
+    $('btnPdfNewTab').hidden = true;
+    $('pdfViewFrame').src = 'about:blank';
+  });
   for (const id of ['sheetGrade', 'sheetStroke', 'sheetPinyin', 'sheetDict', 'sheetTrace']) {
     $(id).addEventListener('change', renderSheet);
   }

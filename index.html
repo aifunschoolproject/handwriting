@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。 -->
+<meta name="app-version" content="2026.10.21.2">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=35">
+<link rel="stylesheet" href="style.css?v=36">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
@@ -39,6 +41,12 @@
   <div class="progress-pill" id="progressPill" role="status" aria-live="polite" title="本課已練習字數">0/0</div>
   <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
   <button class="btn btn-accent btn-choose" id="btnSheet">📄 習字本</button>
+  <details class="app-update" id="appUpdate">
+    <summary>更新與版本</summary>
+    <p id="updateStatus" role="status" aria-live="polite"></p>
+    <button class="btn btn-ghost-btn" id="btnCheckUpdate" type="button">檢查更新</button>
+    <button class="btn btn-ghost-btn" id="btnForceUpdate" type="button">強制更新</button>
+  </details>
 </header>
 
 <!-- 習字本／學習手冊（列印用） -->
@@ -137,11 +145,17 @@
     <button class="btn btn-ghost-btn" id="btnPdfClose">✕ 關閉</button>
   </div>
   <div class="pdf-view-cta">
+    <label class="pdf-save-mode">使用位置
+      <select id="pdfSaveMode">
+        <option value="app">App 內（不開外部網頁）</option>
+        <option value="browser">Chrome／Safari 瀏覽器</option>
+      </select>
+    </label>
     <button class="btn btn-accent btn-pdf-save" id="btnPdfSave">⬇ 儲存 PDF</button>
     <div class="pdf-view-help" id="pdfViewHelp" role="status" aria-live="polite"></div>
     <button class="btn btn-ghost-btn" id="btnPdfNewTab" hidden>↗ 新分頁開啟</button>
   </div>
-  <div class="pdf-view-frame"><iframe id="pdfViewFrame" title="PDF 預覽"></iframe><div class="pdf-view-empty" id="pdfViewEmpty">📄<br><b>PDF 已就緒</b><span>請點上方「⬇ 儲存 PDF」存檔</span></div></div>
+  <div class="pdf-view-frame"><iframe id="pdfViewFrame" title="PDF 預覽"></iframe><div class="pdf-view-empty" id="pdfViewEmpty"><b>PDF 已就緒</b><span>請點上方按鈕選擇儲存方式</span></div></div>
 </div>
 
 <script src="hanzi-writer.min.js?v=1"></script>
@@ -149,6 +163,7 @@
 <script src="dict.js?v=5"></script>
 <script src="jspdf.umd.min.js?v=1"></script>
 <script src="bpmf.js?v=8"></script>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
+<script src="update.js?v=1"></script>
 </body>
 </html>
