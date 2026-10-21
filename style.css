@@ -1202,6 +1202,9 @@ main {
   padding: 0.7rem 2.2rem;
   min-height: var(--touch);
 }
+.btn-pdf-save:disabled { opacity: .6; cursor: default; transform: none; }
+.pdf-view-help.pdf-help-ok { color: #b7f0c8; font-weight: 700; font-size: .9rem; }
+.pdf-view-help.pdf-help-err { color: #ffc9c9; font-weight: 700; }
 .pdf-view-help {
   color: #e8dcc8;
   font-size: 0.8rem;

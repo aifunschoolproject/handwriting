@@ -616,13 +616,14 @@ const b64ToPdfBlob = (b64) => {
   return new Blob([bytes], { type: 'application/pdf' });
 };
 // ── App 內 PDF 預覽＋儲存流程 ──────────────────────────────
-// 平板瀏覽器（App 內嵌 WebView 尤甚）不會自動彈出「存檔到裝置」提示,
-// <a download> 也可能被宿主無聲忽略 → 生成後改在 App 內明確引導存檔:
+// 平板瀏覽器(App 內嵌 WebView 尤甚)不會自動彈出「存檔到裝置」提示,
+// 生成後在 App 內明確引導/自動存檔:
 //  • iOS Safari:iframe 內建渲染 PDF → 預覽＋「分享鍵→儲存到檔案」指引
 //    (iOS 無 Web 存檔 API,分享是唯一路徑)
-//  • Android(含 Unity 內嵌 WebView):「⬇ 儲存 PDF」觸發 <a download>,
-//    由 App 端 DownloadListener 接手存進「下載」資料夾;
-//    Android System WebView 不支援 navigator.share(crbug 40540400),不用分享列
+//  • Android(含 Unity 內嵌 WebView):「⬇ 儲存 PDF」經 vuplex.postMessage
+//    把 PDF 交給 App(afs-aps2 SaveMessageRouter)寫進公開「下載」資料夾;
+//    不再觸發 <a download>——內嵌 WebView 沒有下載監聽,blob 下載會
+//    導去外部(表现为「跳出 App」)且不會存檔
 //  • 其餘(桌機/手機瀏覽器):「⬇ 儲存 PDF」觸發 <a download> 存「下載」,
 //    另附「↗ 新分頁開啟」備援
 const canRenderPdfIframe = () => isIOSBrowser(); // 僅 iOS Safari 有內建 PDF 渲染
@@ -658,23 +659,41 @@ function closePdfViewer() {
   if ($('sheet').hidden) document.body.style.overflow = '';
 }
 // 「⬇ 儲存 PDF」:
-//  • App 端交接:PDF(base64)經 Vuplex 注入的 window.vuplex(與 nav/exit 同一
-//    訊息通道)交給 Unity,由 App 寫進公開「下載」資料夾——
-//    網頁沙箱沒有裝置檔案權限,「自動存下載」只能由 App 端做;
-//    App 端未接時此訊息無接收者,不影響下面的 <a download>
-//  • 接著一律觸發 <a download>(blob: URL,無 ~2MB 上限):
-//    桌機/手機瀏覽器直接存「下載」;App 端若另啟用 WebView 下載監聽亦由此接手
+//  • App 內(Android+vuplex):PDF(base64)經 window.vuplex(與 nav/exit 同一
+//    訊息通道)交給 Unity,由 App 寫進公開「下載」資料夾——網頁沙箱沒有
+//    裝置檔案權限,「自動存下載」只能由 App 端做;存檔結果經
+//    window.hwSaveAck(ok) 回傳(UI 即時提示成功/失敗)
+//  • 其餘(桌機/手機瀏覽器):觸發 <a download>(blob: URL,無 ~2MB 上限)存「下載」
 //  • Android System WebView 不支援 navigator.share(crbug 40540400),不用分享列
+let pdfSaveTimer = null;
+function setPdfSaveStatus(text, kind) { // kind: ''|'ok'|'err'
+  const el = $('pdfViewHelp');
+  el.textContent = text;
+  el.classList.toggle('pdf-help-ok', kind === 'ok');
+  el.classList.toggle('pdf-help-err', kind === 'err');
+}
 function savePdfToDevice() {
   if (!sheetLastPdf) return;
   const { b64, fname } = sheetLastPdf;
   const vuplex = window.vuplex;
   if (isAndroidWebView() && vuplex && typeof vuplex.postMessage === 'function') {
+    clearTimeout(pdfSaveTimer);
+    setPdfSaveStatus('正在存進「下載」資料夾…', '');
+    $('btnPdfSave').disabled = true;
+    // 等 App 回 ack 再恢復按鈕;12 秒沒回(舊版 App 沒有接手)給明確提示
+    pdfSaveTimer = setTimeout(() => {
+      $('btnPdfSave').disabled = false;
+      setPdfSaveStatus('沒有存檔成功——此 App 版本未支援自動存檔,請更新 App 後再試。', 'err');
+    }, 12000);
     try {
       vuplex.postMessage(JSON.stringify({ type: 'save', name: fname, b64 }));
     } catch (e) {
+      clearTimeout(pdfSaveTimer);
+      $('btnPdfSave').disabled = false;
       console.warn('vuplex 交接失敗:', e);
+      setPdfSaveStatus('送檔給 App 失敗,請重試。', 'err');
     }
+    return; // 內嵌 WebView 絕不觸發 <a download>(會導去外部、不會存檔)
   }
   const href = (pdfBlobUrl && !$('pdfView').hidden)
     ? pdfBlobUrl
@@ -684,10 +703,19 @@ function savePdfToDevice() {
     d.href = href; d.download = fname;
     document.body.appendChild(d); d.click();
     setTimeout(() => { d.remove(); if (href !== pdfBlobUrl) URL.revokeObjectURL(href); }, 4000);
+    setPdfSaveStatus('已存檔。若沒在「下載」看到,請檢查檔案管理器。', 'ok');
   } catch (e) {
-    alert('請點 PDF 檢視器工具列的「下載」鍵(⬇)存檔');
+    setPdfSaveStatus('存檔失敗,請改用「↗ 新分頁開啟」。', 'err');
   }
 }
+// App(afs-aps2 SaveMessageRouter)存檔完成後回傳;恢復按鈕並提示結果
+window.hwSaveAck = (ok) => {
+  clearTimeout(pdfSaveTimer);
+  $('btnPdfSave').disabled = false;
+  setPdfSaveStatus(ok
+    ? '✔ 已存到「下載」資料夾'
+    : '存檔失敗,請重試。', ok ? 'ok' : 'err');
+};
 // 「↗ 新分頁開啟」:內嵌 WebView 的備援(新分頁由系統瀏覽器打開,
 // 有完整 PDF 插件,可預覽/下載)
 function openPdfNewTab() {
