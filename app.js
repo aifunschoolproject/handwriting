@@ -23,6 +23,7 @@ const state = {
   currentName: null,
   charIdx: null, // 本課字序（課內 ‹ › 翻字）
   ghostOn: true,
+  gridOn: true, // 格線預設開（與 btnGrid 初始「開」一致；未初始化會吃掉第一下切換）
   fs: 22, // 介面字號：22 正常(基準)／26.4 特大(1.2倍)（root font-size 驅動整體放大）
   done: {}, // { "南一/1/1/1": Set("一","二") }
 };
@@ -50,15 +51,27 @@ const dictBody = $('dictBody');
 
 
 /* ── 進度持久化（localStorage）── */
+// 內嵌 WebView／空間不足時 localStorage 可能不可用；資料損壞（非物件、值非陣列）
+// 一律視為無資料，不讓啟動或完成字時拋錯。
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* 寫入失敗（滿/被禁用）靜默 */ } },
+};
 function loadDone() {
-  try { state.done = JSON.parse(localStorage.getItem('hw_practice_done') || '{}'); }
-  catch { state.done = {}; }
-  for (const k in state.done) state.done[k] = new Set(state.done[k]);
+  try {
+    const raw = JSON.parse(store.get('hw_practice_done') || '{}');
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      for (const k in raw) {
+        const v = raw[k];
+        state.done[k] = Array.isArray(v) ? new Set(v.filter((x) => typeof x === 'string')) : new Set();
+      }
+    }
+  } catch { /* 損壞 → 清空重來 */ }
 }
 function saveDone() {
   const out = {};
   for (const k in state.done) out[k] = [...state.done[k]];
-  localStorage.setItem('hw_practice_done', JSON.stringify(out));
+  store.set('hw_practice_done', JSON.stringify(out));
 }
 function courseKey() { return `${state.version}/${state.grade}/${state.semester}/${state.course}`; }
 function doneSet() {
@@ -112,6 +125,10 @@ function fillGrades() {
   if (!ver?.[state.grade]) state.grade = grades[0];
   selGrade.value = state.grade;
 }
+function validCourse(ver, grade, sem) {
+  const cls = ver?.[grade]?.[sem] || {};
+  return cls[state.course] ? state.course : cls['0'] ? '0' : '1';
+}
 function fillClasses() {
   const sem = DATA[state.version]?.[state.grade]?.[state.semester];
   selClass.innerHTML = '';
@@ -128,7 +145,7 @@ function fillClasses() {
     opt.textContent = `第 ${i} 課`;
     selClass.appendChild(opt);
   }
-  if (!selClass.value || !sem?.[state.course]) state.course = sem?.['0'] ? '0' : '1';
+  state.course = validCourse(DATA[state.version], state.grade, state.semester);
   selClass.value = state.course;
 }
 
@@ -189,11 +206,13 @@ function renderGrid() {
 }
 
 function onFilterChange() {
+  const prevKey = courseKey();
   state.version = selVersion.value;
   state.grade = selGrade.value;
   state.semester = selSemester.value;
   fillGrades();
   fillClasses();
+  if (courseKey() !== prevKey && !detail.hidden) closeDetail(); // 已開字卡屬於舊課
   renderGrid();
   setupSave();
 }
@@ -244,18 +263,26 @@ function ensureSvgScale() {
 }
 
 function fallbackStatic(name) {
-  // 無筆順資料：顯示靜態大字供臨摹。
-  if (svgObserver) { svgObserver.disconnect(); svgObserver = null; }
-  writer = null;
-  writerBox.innerHTML =
-    `<div class="static-char">${name}</div>` +
-    '<div class="static-note">此字無筆順動畫，請依範字書寫</div>';
+  // 套件沒有公開 destroy API；保留唯一 writer 與 SVG，換回有筆順的字時重用。
+  if (svgObserver) svgObserver.disconnect();
+  if (writer) writer.cancelQuiz();
+  const svg = writerBox.querySelector('svg');
+  if (svg) svg.style.display = 'none';
+  writerBox.querySelectorAll('.static-char, .static-note').forEach((el) => el.remove());
+  const glyph = document.createElement('div');
+  glyph.className = 'static-char';
+  glyph.textContent = name;
+  const note = document.createElement('div');
+  note.className = 'static-note';
+  note.textContent = '此字無筆順動畫，請依範字書寫';
+  writerBox.append(glyph, note);
 }
 // 單一 writer 實例；換字用 setCharacter（自動清手筆＋重載筆順），
 // 避免每次 create 在 document 累積 mouseup/touchend 監聽器。
 let writerPromise = Promise.resolve();
 function ensureWriter(name) {
-  if (!writer || writerBox.querySelector('.static-char')) {
+  writerBox.querySelectorAll('.static-char, .static-note').forEach((el) => el.remove());
+  if (!writer) {
     writerBox.innerHTML = '';
     writer = HanziWriter.create(writerBox, name, {
       width: WRITER_SIZE,
@@ -271,6 +298,8 @@ function ensureWriter(name) {
       charDataLoader,
     });
     svgObserver = new MutationObserver(ensureSvgScale);
+  }
+  if (svgObserver) {
     svgObserver.observe(writerBox, { childList: true, subtree: true });
   }
   writerPromise = writer.setCharacter(name);
@@ -291,7 +320,7 @@ function showWriter(name) {
 }
 
 function startQuiz() {
-  if (!writer) return;
+  if (!writer || writerBox.querySelector('.static-char')) return;
   writer.cancelQuiz();
   writer.quiz({
     onComplete: (summary) => {
@@ -316,7 +345,7 @@ function showWriterHint(text) {
   hintTimer = setTimeout(() => writerHint.classList.remove('show'), 4000);
 }
 function playAnimate() {
-  if (!writer) return;
+  if (!writer || writerBox.querySelector('.static-char')) return;
   const name = state.currentName;
   writer.cancelQuiz();
   writer._withDataPromise
@@ -335,7 +364,7 @@ function setGhost(on) {
   state.ghostOn = on;
   $('btnGhost').textContent = (on ? '👁 虛影：開' : '👁 虛影：關');
   $('btnGhost').setAttribute('aria-pressed', String(on));
-  if (writer) (on ? writer.showOutline() : writer.hideOutline());
+  if (writer && !writerBox.querySelector('.static-char')) (on ? writer.showOutline() : writer.hideOutline());
 }
 function setGrid(on) {
   state.gridOn = on;
@@ -437,6 +466,8 @@ function openDetail(c) {
 
 function closeDetail() {
   const el = grid.querySelector(`.char-card[data-name="${CSS.escape(state.currentName)}"]`);
+  // 先取消逐筆練習：避免視窗已關、慢速 onComplete 回調仍標記完成（stale async callback）
+  if (writer) writer.cancelQuiz();
   detail.hidden = true;
   state.currentChar = null;
   state.currentName = null;
@@ -602,32 +633,25 @@ function openSheet() {
 }
 function closeSheet() {
   sheetToken++;
+  closePdfViewer();
   sheetLastPdf = null;
   $('sheet').hidden = true;
   document.body.style.overflow = '';
 }
 const isIOSBrowser = () => /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1); // iPadOS 13+ 偽裝 Mac
-const isAndroidWebView = () => /Android/i.test(navigator.userAgent);
+const isAndroidWebView = () => Boolean(window.vuplex) ||
+  (/Android/i.test(navigator.userAgent) && /;\s*wv\b|Version\/4\.0/i.test(navigator.userAgent));
 const b64ToPdfBlob = (b64) => {
   const bin = atob(b64), len = bin.length;
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: 'application/pdf' });
 };
-// ── App 內 PDF 預覽＋儲存流程 ──────────────────────────────
-// 平板瀏覽器(App 內嵌 WebView 尤甚)不會自動彈出「存檔到裝置」提示,
-// 生成後在 App 內明確引導/自動存檔:
-//  • iOS Safari:iframe 內建渲染 PDF → 預覽＋「分享鍵→儲存到檔案」指引
-//    (iOS 無 Web 存檔 API,分享是唯一路徑)
-//  • Android(含 Unity 內嵌 WebView):「⬇ 儲存 PDF」經 vuplex.postMessage
-//    把 PDF 交給 App(afs-aps2 SaveMessageRouter)寫進公開「下載」資料夾;
-//    不再觸發 <a download>——內嵌 WebView 沒有下載監聽,blob 下載會
-//    導去外部(表现为「跳出 App」)且不會存檔
-//  • 其餘(桌機/手機瀏覽器):「⬇ 儲存 PDF」觸發 <a download> 存「下載」,
-//    另附「↗ 新分頁開啟」備援
-const canRenderPdfIframe = () => isIOSBrowser(); // 僅 iOS Safari 有內建 PDF 渲染
+// App 僅走原生橋接；一般瀏覽器才使用 blob 下載，兩者不得互相降級。
+const canRenderPdfIframe = () => isIOSBrowser() && !isAndroidWebView();
 function showPdfViewer(b64, fname) {
+  resetPdfSave();
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
   pdfBlobUrl = URL.createObjectURL(b64ToPdfBlob(b64));
   const frame = $('pdfViewFrame');
@@ -637,35 +661,37 @@ function showPdfViewer(b64, fname) {
   if (renderable) frame.src = pdfBlobUrl;
   const MB = (b64.length * 3 / 4 / 1048576).toFixed(1);
   $('pdfViewName').textContent = fname + `（${MB} MB）`;
-  const help = $('pdfViewHelp');
-  if (isIOSBrowser()) {
-    help.innerHTML = 'iPad/iPhone 儲存步驟:點 PDF 右下角的<b>分享鍵(↑)</b>→<b>「儲存到 檔案」</b>選資料夾,或<b>列印</b>。iOS 不允許網頁直接存檔,請依此步驟。';
-  } else if (isAndroidWebView()) {
-    // 內嵌 WebView:navigator.share 與 <a download> 都要 App 端(DownloadListener)接手。
-    // 本頁觸發下載,由 Unity 端攔截後存進「下載」資料夾(見 afs-aps2 的 Pdf 下載處理)。
-    help.innerHTML = '點<b>「⬇ 儲存 PDF」</b>即可存進裝置的<b>「下載」</b>資料夾。';
+  if (isAndroidWebView()) {
+    setPdfSaveStatus('點「儲存 PDF」交由目前的容器處理；是否可存檔取決於容器提供的下載功能。', '');
+  } else if (isIOSBrowser()) {
+    setPdfSaveStatus('可點「儲存 PDF」下載，或從 PDF 預覽的分享選單選擇「儲存到檔案」。', '');
   } else {
-    help.innerHTML = '點<b>「⬇ 儲存 PDF」</b>會直接存進<b>「下載」</b>資料夾。若沒反應,請改用「↗ 新分頁開啟」,在開啟的分頁中下載。';
+    setPdfSaveStatus('點「儲存 PDF」開始下載；儲存位置依瀏覽器設定。', '');
   }
-  $('btnPdfSave').hidden = isIOSBrowser();
+  $('btnPdfSave').hidden = false;
   $('btnPdfNewTab').hidden = renderable || isAndroidWebView();
   $('pdfView').hidden = false;
   document.body.style.overflow = 'hidden';
 }
 function closePdfViewer() {
+  resetPdfSave();
   $('pdfView').hidden = true;
   $('pdfViewFrame').src = 'about:blank';
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
   if ($('sheet').hidden) document.body.style.overflow = '';
 }
-// 「⬇ 儲存 PDF」:
-//  • App 內(Android+vuplex):PDF(base64)經 window.vuplex(與 nav/exit 同一
-//    訊息通道)交給 Unity,由 App 寫進公開「下載」資料夾——網頁沙箱沒有
-//    裝置檔案權限,「自動存下載」只能由 App 端做;存檔結果經
-//    window.hwSaveAck(ok) 回傳(UI 即時提示成功/失敗)
-//  • 其餘(桌機/手機瀏覽器):觸發 <a download>(blob: URL,無 ~2MB 上限)存「下載」
-//  • Android System WebView 不支援 navigator.share(crbug 40540400),不用分享列
+// 沿用既有容器協定：送 { type: 'save', name, b64 }，回覆 { ok: boolean }。
+// 不要求容器新增 requestId；原協定無法辨識跨次操作的延遲回覆。
 let pdfSaveTimer = null;
+let pdfSaveRequest = null;
+let pdfBridgeCleanup = null;
+function resetPdfSave() {
+  clearTimeout(pdfSaveTimer);
+  pdfSaveTimer = null;
+  pdfSaveRequest = null;
+  if (pdfBridgeCleanup) pdfBridgeCleanup();
+  $('btnPdfSave').disabled = false;
+}
 function setPdfSaveStatus(text, kind) { // kind: ''|'ok'|'err'
   const el = $('pdfViewHelp');
   el.textContent = text;
@@ -673,63 +699,79 @@ function setPdfSaveStatus(text, kind) { // kind: ''|'ok'|'err'
   el.classList.toggle('pdf-help-err', kind === 'err');
 }
 function savePdfToDevice() {
-  if (!sheetLastPdf) return;
+  if (!sheetLastPdf || pdfSaveRequest) return;
   const { b64, fname } = sheetLastPdf;
-  const vuplex = window.vuplex;
-  if (isAndroidWebView() && vuplex && typeof vuplex.postMessage === 'function') {
-    clearTimeout(pdfSaveTimer);
-    setPdfSaveStatus('正在存進「下載」資料夾…', '');
+  if (isAndroidWebView()) {
+    const request = { sent: false };
+    pdfSaveRequest = request;
     $('btnPdfSave').disabled = true;
-    // 等 App 回 ack 再恢復按鈕;12 秒沒回(舊版 App 沒有接手)給明確提示
-    pdfSaveTimer = setTimeout(() => {
-      $('btnPdfSave').disabled = false;
-      setPdfSaveStatus('沒有存檔成功——此 App 版本未支援自動存檔,請更新 App 後再試。', 'err');
-    }, 12000);
-    try {
-      vuplex.postMessage(JSON.stringify({ type: 'save', name: fname, b64 }));
-    } catch (e) {
+    setPdfSaveStatus('正在連接 App 儲存功能…', '');
+    const send = () => {
+      if (pdfSaveRequest !== request || request.sent || typeof window.vuplex?.postMessage !== 'function') return;
+      if (pdfBridgeCleanup) pdfBridgeCleanup();
       clearTimeout(pdfSaveTimer);
-      $('btnPdfSave').disabled = false;
-      console.warn('vuplex 交接失敗:', e);
-      setPdfSaveStatus('送檔給 App 失敗,請重試。', 'err');
-    }
-    return; // 內嵌 WebView 絕不觸發 <a download>(會導去外部、不會存檔)
+      setPdfSaveStatus('正在存進「下載」資料夾…', '');
+      pdfSaveTimer = setTimeout(() => {
+        resetPdfSave();
+        setPdfSaveStatus('尚未收到容器的存檔結果，無法確認是否成功。請先檢查「下載」資料夾。', 'err');
+      }, 12000);
+      try {
+        request.sent = true;
+        window.vuplex.postMessage(JSON.stringify({ type: 'save', name: fname, b64 }));
+      } catch (e) {
+        resetPdfSave();
+        console.warn('vuplex 交接失敗:', e);
+        setPdfSaveStatus('送檔給 App 失敗，請重試。', 'err');
+      }
+    };
+    window.addEventListener('vuplexready', send);
+    pdfBridgeCleanup = () => {
+      window.removeEventListener('vuplexready', send);
+      pdfBridgeCleanup = null;
+    };
+    pdfSaveTimer = setTimeout(() => {
+      resetPdfSave();
+      setPdfSaveStatus('目前容器未提供可用的儲存橋接；網頁無法直接寫入裝置資料夾，也不會自動跳出 App。', 'err');
+    }, 3000);
+    send();
+    return;
   }
-  const href = (pdfBlobUrl && !$('pdfView').hidden)
-    ? pdfBlobUrl
-    : URL.createObjectURL(b64ToPdfBlob(sheetLastPdf.b64));
+  // 獨立 URL 不受關閉預覽釋放資源影響；瀏覽器並不回報是否已寫入磁碟。
+  const href = URL.createObjectURL(b64ToPdfBlob(b64));
+  const link = document.createElement('a');
   try {
-    const d = document.createElement('a');
-    d.href = href; d.download = fname;
-    document.body.appendChild(d); d.click();
-    setTimeout(() => { d.remove(); if (href !== pdfBlobUrl) URL.revokeObjectURL(href); }, 4000);
-    setPdfSaveStatus('已存檔。若沒在「下載」看到,請檢查檔案管理器。', 'ok');
+    link.href = href;
+    link.download = fname;
+    document.body.appendChild(link);
+    link.click();
+    setPdfSaveStatus('已送出下載請求，請查看瀏覽器下載清單。', '');
   } catch (e) {
-    setPdfSaveStatus('存檔失敗,請改用「↗ 新分頁開啟」。', 'err');
+    setPdfSaveStatus('無法啟動下載，請改用「新分頁開啟」。', 'err');
+  } finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 60000);
   }
 }
-// App(afs-aps2 SaveMessageRouter)存檔完成後回傳;恢復按鈕並提示結果
-window.hwSaveAck = (ok) => {
-  clearTimeout(pdfSaveTimer);
-  $('btnPdfSave').disabled = false;
-  setPdfSaveStatus(ok
-    ? '✔ 已存到「下載」資料夾'
-    : '存檔失敗,請重試。', ok ? 'ok' : 'err');
+// 僅在送出存檔後接受明確的布林結果，不能把 { ok: false } 當成成功。
+window.hwSaveAck = (result) => {
+  if (!pdfSaveRequest?.sent || typeof result?.ok !== 'boolean') return;
+  resetPdfSave();
+  setPdfSaveStatus(result.ok
+    ? '已存到「下載」資料夾'
+    : 'App 存檔失敗，請重試並檢查裝置儲存空間。', result.ok ? 'ok' : 'err');
 };
-// 「↗ 新分頁開啟」:內嵌 WebView 的備援(新分頁由系統瀏覽器打開,
-// 有完整 PDF 插件,可預覽/下載)
+// 只有一般瀏覽器可開新分頁；blob 避免大型 data URL 導航遭攔截。
 function openPdfNewTab() {
-  if (!sheetLastPdf) return;
-  const { b64, fname } = sheetLastPdf;
-  const dataUrl = 'data:application/pdf;base64,' + b64;
-  try {
-    const t = window.open('', '_blank');
-    if (t) { t.location.assign(dataUrl); return; }
-  } catch (e) {}
-  const a = document.createElement('a');
-  a.href = dataUrl; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => a.remove(), 4000);
+  if (!sheetLastPdf || isAndroidWebView()) return;
+  const href = URL.createObjectURL(b64ToPdfBlob(sheetLastPdf.b64));
+  const link = document.createElement('a');
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 60000);
 }
 // 「開啟/預覽 PDF」鈕:App 內預覽＋儲存指引(任何時候都能重開,不被彈窗攔截)
 function sheetOpenLast() {
@@ -737,12 +779,8 @@ function sheetOpenLast() {
   showPdfViewer(sheetLastPdf.b64, sheetLastPdf.fname);
 }
 
-/* ── 習字本 PDF 下載（jsPDF + canvas 自繪 A4 版面）──
- * 嵌入式 WebView 的 window.print() 常無支援、系統預覽頁裁切也不可靠；
- * 改由 canvas 直接繪製每一頁 A4（版型與螢幕 .sheet-page 相同），jsPDF 輸出真實
- * PDF 檔（字型嵌入、任何裝置開啟一致）；下載走「原生 PDF 檢視器」路徑:
- * iOS Safari 忽略 <a download> 且 data URL 有 ~2MB 上限 → 新分頁/blob 開啟
- * （檢視器工具列「分享」→ 儲存到檔案/列印）,桌機/Android 順帶直接下載。
+/* ── 習字本 PDF：canvas 繪製頁面後以 JPEG 嵌入 jsPDF，字形不依賴閱讀器字型。
+ * App 經 SaveMessageRouter 寫入公開下載；瀏覽器使用 blob 下載或預覽。
  * 尺寸：mm → px 固定 8（1mm＝8px），1680×2376px＝A4。 */
 function sheetOpts() {
   return { stroke: $('sheetStroke').checked, trace: $('sheetTrace').checked,
@@ -936,8 +974,10 @@ function drawSheetPage(cv, g) {
 let sheetPdfBusy = false;
 async function sheetPdf() {
   if (sheetPdfBusy) return;
-  const courses = sheetCourses();
+  const courses = sheetCourses().filter((course) => course.chars.length);
   if (!courses.length) { alert('（此課沒有生字）'); return; }
+  const token = sheetToken;
+  const { version, grade, semester } = state;
   sheetPdfBusy = true;
   const btn = $('btnSheetPrint');
   btn.disabled = true; btn.textContent = '⏳ 產生中…';
@@ -951,12 +991,14 @@ async function sheetPdf() {
       ]);
     } catch {}
     // 筆順資料（缺字先補抓）
-    const names = [];
-    for (const c of courses) for (const ch of c.chars) names.push(ch.name);
-    await loadHanziData();
-    const miss = names.filter((n) => !(window.HANZI_DATA && window.HANZI_DATA[n]));
-    if (opts.stroke && miss.length) await Promise.all(miss.map((n) => new Promise((res) =>
-      charDataLoader(n, res, res))));
+    if (opts.stroke) {
+      await loadHanziData();
+      if (token !== sheetToken) return;
+      const names = new Set(courses.flatMap((course) => course.chars.map((ch) => ch.name)));
+      const miss = [...names].filter((name) => !window.HANZI_DATA?.[name]);
+      await Promise.all(miss.map((name) => new Promise((resolve) => charDataLoader(name, resolve, resolve))));
+    }
+    if (token !== sheetToken) return;
     // 每字一頁內註解資料
     const readings = {};
     for (const c of courses) for (const ch of c.chars) {
@@ -970,8 +1012,9 @@ async function sheetPdf() {
     let pg = 0, first = true;
     const tick = () => new Promise((r) => setTimeout(r, 0));
     for (const c of courses) {
-      const rows = c.chars.slice();
+      const rows = c.chars;
       for (let i = 0; i < rows.length; i += SHEET_PAGE_CHARS) {
+        if (token !== sheetToken) return;
         pg++;
         drawSheetPage(cv, { title: c.title, pg, chars: rows.slice(i, i + SHEET_PAGE_CHARS), opts, readings });
         if (!first) pdf.addPage();
@@ -981,8 +1024,9 @@ async function sheetPdf() {
         await tick(); // 每頁讓出主線程,長學期不凍結畫面
       }
     }
-    const semName = { '1': '上', '2': '下' }[state.semester] || '';
-    const fname = `習字本_${VERSION_LABELS[state.version] || state.version}_${state.grade}年${semName}${pg}頁.pdf`;
+    if (token !== sheetToken) return;
+    const semName = { '1': '上', '2': '下' }[semester] || '';
+    const fname = `習字本_${VERSION_LABELS[version] || version}_${grade}年${semName}${pg}頁.pdf`;
     // 生成 PDF → base64(記下供「開啟/下載」隨時重開)。平板瀏覽器不會自動
     // 提示存檔 → 直接在 App 內展示 PDF＋給出明確的儲存步驟/按鈕。
     const dataUrl = pdf.output('datauristring');
@@ -993,13 +1037,14 @@ async function sheetPdf() {
     showPdfViewer(b64, fname);
     btn.textContent = '✅ PDF 已就緒';
   } catch (err) {
-    console.error('PDF 產生失敗', err);
-    alert('PDF 產生失敗：' + err.message);
-    btn.textContent = '⬇ 下載 PDF';
+    if (token === sheetToken) {
+      console.error('PDF 產生失敗', err);
+      alert('PDF 產生失敗：' + err.message);
+    }
   } finally {
     sheetPdfBusy = false;
     btn.disabled = false;
-    setTimeout(() => { if (!sheetPdfBusy) btn.textContent = '⬇ 下載 PDF'; }, 1500);
+    btn.textContent = '⬇ 下載 PDF';
   }
 }
 
@@ -1012,6 +1057,7 @@ function bind() {
   selSemester.addEventListener('change', onFilterChange);
   selClass.addEventListener('change', () => {
     if (!selClass.value) return;
+    if (state.course !== selClass.value && !detail.hidden) closeDetail(); // 已開字卡屬於舊課
     state.course = selClass.value;
     renderGrid();
     setupSave();
@@ -1092,13 +1138,16 @@ function refreshSel() {
   sel.course = selClass.value || null;
 }
 function setupLast() {
-  try { return JSON.parse(localStorage.getItem('hw_last_course') || 'null'); } catch { return null; }
+  try {
+    const raw = JSON.parse(store.get('hw_last_course') || 'null');
+    return raw && typeof raw === 'object' ? raw : null;
+  } catch { return null; }
 }
 function setupSave() {
   refreshSel();
   const v = VERSION_LABELS[state.version] || state.version || '';
   const g = ['', '一', '二', '三', '四', '五', '六'][state.grade] || state.grade || '';
-  localStorage.setItem('hw_last_course', JSON.stringify({
+  store.set('hw_last_course', JSON.stringify({
     v, gk: state.grade, g, s: state.semester, c: state.course,
     text: `${v}・${g}年級・${state.semester === '1' ? '上' : '下'}學期・${state.course === '0' ? '特殊單元' : `第 ${state.course} 課`}`,
   }));
@@ -1139,10 +1188,6 @@ function renderSetupSteps() {
   const g = ['', '一', '二', '三', '四', '五', '六'][sel.grade] || sel.grade || '';
   const courseTxt = sel.course === '0' ? '特殊單元' : `第 ${sel.course} 課`;
   summary.innerHTML = bpmf(`${v}・${g}年級・${sel.semester === '1' ? '上' : '下'}學期・${courseTxt}`);
-}
-function validCourse(ver, grade, sem) {
-  const cls = ver?.[grade]?.[sem] || {};
-  return cls[state.course] ? state.course : cls['0'] ? '0' : '1';
 }
 function applySel(version, grade, semester, course, startPractice) {
   if (version) state.version = version;
@@ -1189,13 +1234,13 @@ function setFs(px) {
   if (!FS_LEVELS.includes(px)) return;
   state.fs = px;
   document.documentElement.style.setProperty('--fs', px + 'px');
-  localStorage.setItem('hw_fs', String(px));
+  store.set('hw_fs', String(px));
   for (const b of fsCtl.querySelectorAll('button[data-fs]')) {
     b.classList.toggle('on', Number(b.dataset.fs) === px);
   }
 }
 function loadFs() {
-  const saved = Number(localStorage.getItem('hw_fs'));
+  const saved = Number(store.get('hw_fs'));
   setFs(FS_LEVELS.includes(saved) ? saved : 22);
 }
 

@@ -13,7 +13,6 @@
     旁: 'ㄆㄤˊ', 首: 'ㄕㄟˇ', 語: 'ㄩˋ',   // 偏旁、部首、語言
     重: 'ㄓㄨㄥˊ',                          // 重來（＝再，非「重量」ㄓㄨㄥˋ）
   };
-  const has = (ch) => DICT[ch] || OVER[ch];
   function zy(ch) {
     if (OVER[ch]) return OVER[ch];
     const d = DICT[ch];
@@ -23,7 +22,7 @@
   function bpmfTop(text) {
     let out = '';
     for (const ch of String(text ?? '')) {
-      const z = has(ch) ? zy(ch) : null;
+      const z = zy(ch);
       out += z ? '<span class="bpmf"><i class="bpmf-z">' + z + '</i>' + ch + '</span>' : ch;
     }
     return out;
@@ -33,7 +32,7 @@
   window.bpmfSide = function (text) {
     let out = '';
     for (const ch of String(text ?? '')) {
-      const z = has(ch) ? zy(ch) : null;
+      const z = zy(ch);
       if (!z) { out += ch; continue; }
       let bopo = z, tone = '', light = '';
       const last = z.slice(-1);
