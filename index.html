@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。 -->
-<meta name="app-version" content="2026.10.21.4">
+<meta name="app-version" content="2026.10.22.1">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=38">
+<link rel="stylesheet" href="style.css?v=39">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
@@ -57,6 +57,7 @@
     <span class="sheet-count" id="sheetCount"></span>
     <button class="btn btn-ghost-btn" id="btnSheetClose">✕ 關閉</button>
     <a class="btn btn-accent btn-sheet-dl" id="sheetDownload">下載本課 PDF</a>
+    <p class="sheet-save-status" id="sheetSaveStatus" role="status" aria-live="polite" hidden></p>
   </div>
   <div class="sheet-scroll" id="sheetScroll"></div>
 </div>
@@ -98,6 +99,20 @@
       <div class="detail-meta" id="dMeta"></div>
       <button class="btn btn-ghost-btn detail-back" id="btnClose" title="返回字卡">返回字卡</button>
     </div>
+    <details class="detail-dict" id="dictBox">
+      <summary>📖 教育部《國語辭典》</summary>
+      <section class="dict-reader" aria-labelledby="dictTitle">
+        <div class="dict-reader-head">
+          <strong id="dictTitle">國語辭典</strong>
+          <button class="btn btn-ghost-btn" type="button" id="btnDictClose">返回寫字</button>
+        </div>
+        <div class="dict-nav">
+          <button class="btn btn-ghost-btn" type="button" id="btnDictUp" aria-label="字典往上一頁" aria-controls="dictBody">上一頁</button>
+          <button class="btn btn-ghost-btn" type="button" id="btnDictDown" aria-label="字典往下一頁" aria-controls="dictBody">下一頁</button>
+        </div>
+        <div class="dict-body" id="dictBody" role="region" aria-label="國語辭典釋義，可上下滑動或按翻頁按鈕" tabindex="0"></div>
+      </section>
+    </details>
     <p class="practice-instruction" id="practiceInstruction" role="status" aria-live="polite">照著淡藍色的字，一筆一筆寫。</p>
 
     <div class="canvas-zone">
@@ -127,10 +142,6 @@
       </details>
     </div>
 
-    <details class="detail-dict" id="dictBox">
-      <summary>📖 教育部《國語辭典》</summary>
-      <div class="dict-body" id="dictBody"></div>
-    </details>
   </div>
 </div>
 
@@ -138,7 +149,7 @@
 <script src="data.js?v=1"></script>
 <script src="dict.js?v=5"></script>
 <script src="bpmf.js?v=8"></script>
-<script src="app.js?v=39"></script>
-<script src="update.js?v=2"></script>
+<script src="app.js?v=40"></script>
+<script src="update.js?v=3"></script>
 </body>
 </html>

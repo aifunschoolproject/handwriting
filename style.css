@@ -732,7 +732,7 @@ main {
   .practice-primary .btn { min-height: 2.5rem; font-size: 0.95rem; }
 }
 
-/* ── 簡編本字典（預設折疊；寫字頁最下）── */
+/* ── 國語辭典：入口靠近生字，閱讀區固定在宿主安全範圍內 ── */
 .detail-dict {
   margin-top: 0.9rem;
   border-top: 1px dashed var(--line);
@@ -753,9 +753,52 @@ main {
 .detail-dict summary::before { content: "▸ "; }
 /* 明確隱藏閉合時的正文（此裝置 Chromium 的閉合 <details> 不套用 UA 的
    content-visibility:hidden，body 會留下不繪製的 layout 盒、造成虛幻捲動） */
-.detail-dict:not([open]) .dict-body { display: none; }
+.detail-dict:not([open]) .dict-reader { display: none; }
 .detail-dict[open] summary::before { content: "▾ "; }
-.dict-body { margin-top: 0.55rem; font-size: 0.85rem; line-height: 1.7; }
+.dict-reader {
+  position: fixed;
+  inset: 0 0 var(--content-bottom) var(--side-w);
+  z-index: 3; /* 高於畫布的完成標記與筆畫提示。 */
+  display: flex;
+  flex-direction: column;
+  padding: calc(0.7rem + env(safe-area-inset-top)) 0.85rem 0.85rem;
+  background: var(--bg);
+}
+.dict-reader-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.dict-reader-head strong { flex: 1; min-width: 0; }
+.dict-reader-head .btn { flex-shrink: 0; }
+.dict-body {
+  margin-top: 0.55rem;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 40rem;
+  align-self: center;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: auto;
+}
+/* 獨立閱讀區在橫直向都可翻頁；點按控制不依賴宿主的拖曳轉送方式。 */
+.dict-nav {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+.dict-nav .btn {
+  flex: 1 1 0;
+  min-height: 2.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--green);
+}
 .dict-rad {
   display: flex;
   align-items: center;
@@ -983,6 +1026,17 @@ main {
   white-space: nowrap;
 }
 .btn-sheet-dl:focus-visible { outline-color: #7fd4c5; }
+.sheet-save-status {
+  flex-basis: 100%;
+  margin: 0.2rem 0;
+  padding: 0.5rem;
+  border-left: 0.2rem solid var(--green);
+  background: var(--green-soft);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.btn-sheet-dl[aria-disabled="true"] { opacity: 0.65; cursor: wait; }
 .sheet-scroll {
   flex: 1;
   overflow: auto;
@@ -1171,9 +1225,9 @@ main {
     grid-template-rows: auto auto auto minmax(0, 1fr);
     grid-template-areas:
       "head   right"
+      "dict   right"
       "inst   right"
-      "act    right"
-      "dict   right";
+      "act    right";
     gap: 0.5rem 1.1rem;
     align-content: start;
     overflow-y: auto;
@@ -1188,7 +1242,6 @@ main {
   .practice-instruction { grid-area: inst; margin: 0.3rem 0 0; }
   .detail-actions { grid-area: act; margin-top: 0.55rem; }
   .detail-dict { grid-area: dict; margin-top: 0.6rem; }
-  .dict-body { max-height: 20vh; overflow-y: auto; }
   .canvas-zone {
     grid-area: right;
     margin: 0;

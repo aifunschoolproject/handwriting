@@ -1,6 +1,6 @@
 /* 發布時同步更新 index.html 的 app-version 與有變更資源的 v。
  * 版本檢查不使用 HTTP 快取；更新只重新載入頁面，不清除 localStorage。
- * 不在孩子書寫時自動重新載入；PDF 是獨立檔案，不依賴頁面記憶體。 */
+ * 不在孩子書寫或等待 App 儲存回報時自動重新載入。 */
 (() => {
   'use strict';
   const version = document.querySelector('meta[name="app-version"]').content;
@@ -14,7 +14,7 @@
 
   async function checkVersion(force = false, manual = false) {
     if (busy || (!manual && Date.now() - checkedAt < 60000)) return;
-    if (force && !window.confirm('重新載入最新版？已完成的練習紀錄會保留；未完成的筆畫不會保留。')) return;
+    if (force && !window.confirm('重新載入最新版？已完成的練習紀錄會保留；未完成的筆畫不會保留。若 PDF 正在儲存，請先等候 App 回報再更新。')) return;
     busy = true;
     check.disabled = reload.disabled = true;
     if (manual) status.textContent = '正在連線檢查最新版…';

@@ -438,6 +438,8 @@ const bookZyHit = (d, bookRaw) => {
   return hit;
 };
 function renderDict(c) {
+  dictBody.scrollTop = 0; // 換字從第一個釋義開始，不沿用上一字的閱讀位置。
+  $('dictTitle').textContent = `「${c.name}」的國語辭典`;
   const d = DICT[c.name];
   if (!d) {
     dictBody.innerHTML = '<p class="dict-none">' + bpmf('辭典未收錄此字。') + '</p>';
@@ -475,6 +477,55 @@ function renderDict(c) {
   }
   h += '</div>';
   dictBody.innerHTML = h;
+}
+/* ── 字典翻頁（宿主兜底）──
+ * 宿主 Unity Webview 只送 mouse drag（無 native touch 序列）時，
+ * overflow-y:auto 容器不會被 mouse drag 捲動；真 touch 裝置原生捲動正常。
+ * 這裡提供兩層兜底、皆只作用 .dict-body：
+ *  1. ▲/▼ 按鈕：固定步長翻頁，任何輸入模式皆可按；
+ *  2. pointer drag：pointerType=mouse 在 .dict-body 上拖曳 → scrollTop，
+ *     touch pointer 不攔截（維持原生捲動），畫布 touch-action:none 不經此路徑。 */
+function dictPage(delta) {
+  const max = dictBody.scrollHeight - dictBody.clientHeight;
+  if (max <= 0) return;
+  const step = dictBody.clientHeight * 0.85;
+  dictBody.scrollTo({ top: Math.max(0, Math.min(max, dictBody.scrollTop + delta * step)), behavior: 'smooth' });
+}
+function bindDictScroll() {
+  const btnUp = $('btnDictUp'), btnDown = $('btnDictDown');
+  btnUp.addEventListener('click', () => dictPage(-1));
+  btnDown.addEventListener('click', () => dictPage(1));
+  const updateButtons = () => {
+    btnUp.disabled = dictBody.scrollTop <= 1;
+    btnDown.disabled = dictBody.scrollTop >= dictBody.scrollHeight - dictBody.clientHeight - 1;
+  };
+  dictBody.addEventListener('scroll', updateButtons, { passive: true });
+  $('btnDictClose').addEventListener('click', () => { dictBox.open = false; });
+  dictBox.addEventListener('toggle', () => {
+    updateButtons();
+    if (dictBox.open) dictBody.focus({ preventScroll: true });
+    else if (!detail.hidden) dictBox.querySelector('summary').focus({ preventScroll: true });
+  });
+  new ResizeObserver(updateButtons).observe(dictBody);
+  updateButtons();
+
+  let pointer = null, startY = 0, startScroll = 0;
+  dictBody.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    pointer = e.pointerId;
+    startY = e.clientY;
+    startScroll = dictBody.scrollTop;
+    dictBody.setPointerCapture(pointer);
+  });
+  dictBody.addEventListener('pointermove', (e) => {
+    if (pointer !== e.pointerId || Math.abs(e.clientY - startY) < 4) return;
+    dictBody.scrollTop = startScroll - (e.clientY - startY);
+  });
+  const stopDrag = () => { pointer = null; };
+  dictBody.addEventListener('pointerup', stopDrag);
+  dictBody.addEventListener('pointercancel', stopDrag);
+  dictBody.addEventListener('lostpointercapture', stopDrag);
+  window.addEventListener('blur', stopDrag);
 }
 
 /* ── 詳細視窗 ──
@@ -722,10 +773,71 @@ function closeSheet() {
   $('sheet').hidden = true;
   document.body.style.overflow = '';
 }
-// ── 下載連結：與目前預覽（單課／整學期）完全同步的靜態 PDF（build 預產）。
-// 一般 <a>＋相對路徑＋download 屬性、無 target=_blank：使用者手勢交宿主
-// 既有 HTTP 下載處理，不經 blob/data/外開閱讀器／分享。
+// 固定 PDF 保留 HTTPS 下載；Vuplex 使用 afs-aps2 已註冊的 SaveMessageRouter，
+// {type:'save', name, b64} → DownloadsStore（公開 Download/）→ hwSaveAck({ok})。
+// 回覆沒有 request id：同時只允許一筆；逾時仍保留待確認狀態，避免晚到回覆認錯檔案。
 const sheetDl = $('sheetDownload');
+let sheetSaveRequest = null;
+function sheetSaveStatus(text) {
+  const status = $('sheetSaveStatus');
+  status.hidden = false;
+  status.textContent = text;
+}
+
+window.hwSaveAck = (result) => {
+  const request = sheetSaveRequest;
+  if (!request?.waiting || typeof result?.ok !== 'boolean') return;
+  clearTimeout(request.timer);
+  sheetSaveRequest = null;
+  refreshSheetDownload();
+  sheetSaveStatus(result.ok
+    ? `App 已回報儲存成功：${request.name}。請開啟平板「我的檔案／檔案」→「下載（Download）」查看。`
+    : `App 回報儲存失敗：${request.name}。請確認平板儲存空間後再試；本次未確認存檔成功。`);
+};
+
+async function saveSheetPdf(event) {
+  if (sheetSaveRequest || !sheetDl.hasAttribute('href')) {
+    event.preventDefault();
+    return;
+  }
+  if (typeof window.vuplex?.postMessage !== 'function') {
+    sheetSaveStatus('已交由目前瀏覽器處理下載。網頁無法確認儲存結果與位置；請查看瀏覽器的下載清單。');
+    return;
+  }
+  event.preventDefault(); // 不導向 PDF、不跳出 App；檔案交給現有原生儲存介面。
+  const request = { name: sheetDl.download, waiting: false, timer: null };
+  const url = sheetDl.href;
+  sheetSaveRequest = request;
+  refreshSheetDownload();
+  sheetSaveStatus(`正在取得 ${request.name}，請稍候…`);
+  const controller = new AbortController();
+  const fetchTimer = setTimeout(() => controller.abort(), 60000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`PDF 連線失敗（HTTP ${response.status}）`);
+    const pdf = await response.blob();
+    if (await pdf.slice(0, 5).text() !== '%PDF-') throw new Error('伺服器未回傳有效的 PDF');
+    const b64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
+      reader.onerror = () => reject(new Error('無法讀取 PDF 內容'));
+      reader.readAsDataURL(pdf);
+    });
+    request.waiting = true;
+    sheetSaveStatus(`正在請 App 儲存 ${request.name}，等待儲存結果…`);
+    request.timer = setTimeout(() => {
+      sheetSaveStatus(`App 尚未回報 ${request.name} 的儲存結果。請先到平板「檔案」→「下載」查看；為避免重複送出，收到回報前暫停再次儲存。`);
+    }, 30000);
+    window.vuplex.postMessage(JSON.stringify({ type: 'save', name: request.name, b64 }));
+  } catch (error) {
+    clearTimeout(request.timer);
+    sheetSaveRequest = null;
+    refreshSheetDownload();
+    sheetSaveStatus(`尚未完成儲存：${error.name === 'AbortError' ? '取得 PDF 逾時，請確認網路後再試' : error.message}。`);
+  } finally {
+    clearTimeout(fetchTimer);
+  }
+}
 function refreshSheetDownload() {
   const total = sheetCourses().reduce((n, c) => n + c.chars.length, 0);
   if (!total) {
@@ -743,8 +855,9 @@ function refreshSheetDownload() {
   url.searchParams.set('v', document.querySelector('meta[name="app-version"]').content);
   sheetDl.href = url.href;
   sheetDl.download = `習字本_${ver}_${state.grade}年${semName}_${scope}.pdf`;
-  sheetDl.textContent = whole ? '下載整學期 PDF' : '下載本課 PDF';
-  sheetDl.removeAttribute('aria-disabled');
+  sheetDl.textContent = sheetSaveRequest ? '等待儲存結果…' : (whole ? '下載整學期 PDF' : '下載本課 PDF');
+  if (sheetSaveRequest) sheetDl.setAttribute('aria-disabled', 'true');
+  else sheetDl.removeAttribute('aria-disabled');
 }
 
 /* ── 事件綁定 ── */
@@ -766,8 +879,14 @@ function bind() {
   // 詳細視窗開關
   $('btnClose').addEventListener('click', closeDetail);
   detail.addEventListener('click', (e) => { if (e.target === detail) closeDetail(); });
+  bindDictScroll(); // 字典 ▲/▼ 翻頁＋mouse-drag 兜底（見 renderDict 後說明）
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (!$('sheet').hidden) closeSheet(); else if (!detail.hidden) closeDetail(); return; }
+    if (e.key === 'Escape') {
+      if (!$('sheet').hidden) closeSheet();
+      else if (dictBox.open) dictBox.open = false;
+      else if (!detail.hidden) closeDetail();
+      return;
+    }
     // 寫字畫面：← → 課內翻字
     if (!detail.hidden) {
       if (e.key === 'ArrowLeft') stepChar(-1);
@@ -802,6 +921,7 @@ function bind() {
   $('btnSheet').addEventListener('click', openSheet);
   $('btnSheetClose').addEventListener('click', closeSheet);
   $('sheetGrade').addEventListener('change', () => { renderSheet(); refreshSheetDownload(); });
+  sheetDl.addEventListener('click', saveSheetPdf);
   // 頂欄篩選（版本/年級/學期/課次）變化時，若習字本開著要同步預覽與下載連結
   for (const el of [selVersion, selGrade, selSemester, selClass]) {
     el.addEventListener('change', () => { if (!$('sheet').hidden) { renderSheet(); refreshSheetDownload(); } });
