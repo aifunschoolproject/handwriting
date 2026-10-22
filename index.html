@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。 -->
-<meta name="app-version" content="2026.10.22.3">
+<meta name="app-version" content="2026.10.22.4">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=42">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
@@ -40,7 +40,6 @@
   </div>
   <div class="progress-pill" id="progressPill" role="status" aria-live="polite" title="本課已練習字數">0/0</div>
   <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
-  <button class="btn btn-accent btn-choose" id="btnSheet">📄 習字本</button>
   <details class="app-update" id="appUpdate">
     <summary>更新與版本</summary>
     <p id="updateStatus" role="status" aria-live="polite"></p>
@@ -48,17 +47,6 @@
     <button class="btn btn-ghost-btn" id="btnForceUpdate" type="button">強制更新</button>
   </details>
 </header>
-
-<!-- 習字本／學習手冊（僅預覽；預產 PDF 檔案保留，網頁不提供下載） -->
-<div class="sheet" id="sheet" role="dialog" aria-label="習字本" hidden>
-  <div class="sheet-bar no-print">
-    <label class="sheet-opt"><input type="checkbox" id="sheetGrade"> <span class="lbl">整學期</span></label>
-    <span class="sheet-format-note">固定版型：筆順・右側注音・釋義例詞・描紅</span>
-    <span class="sheet-count" id="sheetCount"></span>
-    <button class="btn btn-ghost-btn" id="btnSheetClose">✕ 關閉</button>
-  </div>
-  <div class="sheet-scroll" id="sheetScroll"></div>
-</div>
 
 <!-- 進入引導：大圖卡選 版本／年級／學期／課次，點課卡即練 -->
 <div class="setup" id="setup" role="region" aria-labelledby="setupTitle">
@@ -147,7 +135,7 @@
 <script src="data.js?v=1"></script>
 <script src="dict.js?v=5"></script>
 <script src="bpmf.js?v=8"></script>
-<script src="app.js?v=42"></script>
+<script src="app.js?v=43"></script>
 <script src="update.js?v=3"></script>
 </body>
 </html>

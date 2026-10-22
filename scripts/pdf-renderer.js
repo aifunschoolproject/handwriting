@@ -1,9 +1,8 @@
 /* ── 習字本 PDF 產生器（build-only）──────────────────────────────
  * 供 scripts/build-pdfs.mjs 在 Playwright 中注入使用，公開頁面不引用：
  *   載入順序＝app.js（先）→ jspdf.umd.min.js → 本檔（最後）。
- * 版面與 app.js 的 .sheet-page 預覽完全相同（同一套字型、座標、
- * 1000×1000 格內筆順／注音座標），只把逐頁 canvas 繪製與 jsPDF
- * 組裝從 app 端搬到這裡。
+ * 固定 A4 版面使用專案字型與 1000×1000 格內筆順／注音座標，
+ * 逐頁以 canvas 繪製，再由 jsPDF 組裝；不依賴網頁預覽 DOM 或樣式。
  *
  * buildWorksheetPdf({ version, grade, semester, course }) →
  *   Promise<{ b64, pageCount }>；course＝null 或 'semester'＝整學期
@@ -52,11 +51,11 @@
   }
 
   // 繪一頁習字本到 canvas（g：course 資料＋該頁字元）。
-  // 版面＝A4 全幅（210×297mm）鏡像 .sheet-page 的內部版面：S＝8px/mm、1680×2376px、
-  // 內距 7/7/6mm（同 .sheet-page）、pt→mm 用 25.4/72、六格高度受限使 8 列全部入版。
+  // A4 全幅（210×297mm）：S＝8px/mm、1680×2376px，
+  // 內距 7/7/6mm、pt→mm 用 25.4/72、六格高度受限使 8 列全部入版。
   // 表頭＝11pt 粗體標題行＋姓名/頁碼 baseline 對齊＋1px dotted＋0.5mm padding-bottom＋1.5px 墨線＋2mm margin。
-  // 註解（.ch-info）：「N 筆・部首 X」6.8pt 灰＋釋義 6.6pt＋例詞 6.6pt 橙，
-  // 整行 nowrap、釋義截斷不溢出、左緣對齊第一格。（與 app 預覽 .sheet-page 一致）
+  // 註解：「N 筆・部首 X」6.8pt 灰＋釋義 6.6pt＋例詞 6.6pt 橙，
+  // 整行 nowrap、釋義截斷不溢出、左緣對齊第一格。
   function drawSheetPage(cv, g) {
     const ctx = cv.getContext('2d');
     const S = 8;                         // px/mm
@@ -78,7 +77,7 @@
     const dotY = baseY;
     const ruleY = padT + titleH + mm(0.5) + 1.5;
     const rowsTop = ruleY + mm(2);
-    // 六格＝全寬（寬度受限）、註解行高（.ch-info 6.6pt×1.3）
+    // 六格＝全寬（寬度受限）、註解行高 6.6pt×1.3
     const cellGap = mm(1.2);
     const cell = (cw - cellGap * 5) / 6;            // 31.67mm
     const infoH = opts.dict ? mm(6.6 * PT) * 1.3 : 0;
@@ -93,7 +92,7 @@
     ctx.fillStyle = ink; ctx.font = F(11, 700);
     ctx.fillText(g.title, padL, baseY);
     const tw = ctx.measureText(g.title).width;
-    const gap = mm(3.5);                         // .sheet-hd gap 0.6rem（root 22px＝13.2px）
+    const gap = mm(3.5);                         // 表頭間距
     const pgTxt = `第 ${g.pg} 頁`;
     ctx.font = F(6.8);
     const pgW = ctx.measureText(pgTxt).width;
@@ -128,7 +127,7 @@
         ctx.strokeStyle = ink; ctx.lineWidth = mm(0.35);
         ctx.strokeRect(cx0 + mm(0.35) / 2, y + mm(0.35) / 2, cellF - mm(0.35), cellF - mm(0.35));
       }
-      // 範字與右側注音位置和 SVG 預覽共用；關閉注音時範字恢復置中。
+      // 範字與右側注音使用固定格內座標；關閉注音時範字恢復置中。
       const rubyMarks = opts.pinyin ? sheetRubyMarks(ch.zhuYin) : [];
       ctx.fillStyle = ink;
       ctx.font = `400 ${Math.round(cellF * (rubyMarks.length ? 0.58 : 0.64))}px ${KA}`;
@@ -172,7 +171,7 @@
         ctx.fillText(ch.name, cx0 + cellF / 2, y + cellF / 2);
       }
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      // 註解（.ch-info：整行 baseline 對齊、左緣＝第一格）
+      // 註解：整行 baseline 對齊、左緣＝第一格
       const iy = y + cellF + infoGap + infoH * 0.7;
       if (opts.dict) {
         const d = DICT[ch.name];

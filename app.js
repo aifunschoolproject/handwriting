@@ -5,7 +5,7 @@
  *   唸字功能已移除（內嵌瀏覽器無 TTS）；注音改為版面顯示
  *   HanziWriter（筆順動畫＋逐筆練習）
  *   習字本 PDF：靜態預產（scripts/build-pdfs.mjs + scripts/pdf-renderer.js）
- *   存放於 downloads/worksheets/；網頁只保留預覽，不提供下載或呼叫 App 儲存。
+ *   存放於 downloads/worksheets/；網頁不提供習字本預覽、下載或 App 儲存。
  * DATA[版本][年級 1..6][學期 1|2][課次 '0'=特殊單元,'1'..'12'] = [{name,zhuYin,fullStroke,radical,type}]
  * ──────────────────────────────────────────────────────── */
 'use strict';
@@ -18,8 +18,8 @@ const DICT = window.HANDWRITING_DICT || {};
 /* ── 習字本 PDF（靜態預產）────────────────────────────
  * 版面固定全開（筆順／注音／釋義例詞／描紅格皆含），
  * 檔案由 build 端（scripts/pdf-renderer.js）預產到
- * downloads/worksheets/；網頁保留同一版面預覽，PDF 產生與檔案仍保留。 */
-// 固定版面選項（build 與 app 共用；公開頁面已無選項開關）。
+ * downloads/worksheets/；僅保留建置所需資料與函式，不提供網頁預覽。 */
+// PDF 建置使用的固定版面選項。
 const SHEET_OPTIONS = Object.freeze({ stroke: true, pinyin: true, dict: true, trace: true });
 const SHEET_SLUG = { '南一': 'nanyi', '康軒': 'kangxuan', '翰林': 'hanlin' };
 // 選課 → 靜態 PDF 相對路徑（整學期＝semester.pdf，單課＝course-N.pdf）。
@@ -605,37 +605,9 @@ function stepChar(delta) {
 
 
 
-/* ── 習字本／學習手冊（生成＋列印）─────────────
- * 每字一組：六格全寬（範字／筆順＋號／描紅／空格×3）在上，
- * 學習手冊註解（注音・筆畫・部首・釋義・例詞）整行在下；
- * 每課分頁（A4 每頁 8 字）；「整學期」＝同年級同學期全部課次。
- * 筆順 SVG 直接取 window.HANZI_DATA（hanzi-writer 格式，y 向上，資料框 0..1024 / -124..900）。 */
+/* ── PDF 建置共用資料（無網頁預覽介面）───────────── */
 const SHEET_PAGE_CHARS = 8;
-const SHEET_NS = 'http://www.w3.org/2000/svg';
-
-// 筆順 SVG（紅筆畫，無筆順號）；無筆順資料回 null（該格變空格）。
-// 筆畫資料為 hanzi-writer 慣例：y 向上、資料框 x 0..1024 / y -124..900；
-// SVG 座標 y 向下，故群組翻轉＋縮放讓筆畫正立。
-function strokeSvg(name) {
-  const d = window.HANZI_DATA && window.HANZI_DATA[name];
-  if (!d || !d.strokes) return null;
-  const s = 1000 / 1024;               // 資料框 1024 → 1000
-  const fy = (900 * s).toFixed(2);      // y 翻轉的平移項
-  const svg = document.createElementNS(SHEET_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 1000 1000');
-  svg.setAttribute('aria-hidden', 'true');
-  const g = document.createElementNS(SHEET_NS, 'g');
-  g.setAttribute('transform', `matrix(${s},0,0,${-s},0,${fy})`);
-  d.strokes.forEach((st) => {
-    const p = document.createElementNS(SHEET_NS, 'path');
-    p.setAttribute('d', st);
-    g.appendChild(p);
-  });
-  svg.appendChild(g);
-  return svg;
-}
-
-// SVG 預覽與 PDF 共用 1000×1000 格內座標，聲調在右、輕聲在上。
+// PDF 的 1000×1000 格內座標，聲調在右、輕聲在上。
 function sheetRubyMarks(reading) {
   const { bopo, tone, light } = bpmfParts(reading);
   const symbols = [...bopo];
@@ -646,131 +618,18 @@ function sheetRubyMarks(reading) {
   return marks;
 }
 
-// 一格：cls='cell-ref' 黑字／'cell-stroke' 紅筆順／'cell-trace' 淡灰描紅／'cell-blank' 空格。
-// 範字／描紅用 SVG 文字（viewBox 0 0 1000 1000），隨格子等比縮放，
-// 手機小格與 A4 大格字體比例一致，不會溢出格子。
-function sheetCell(name, cls, reading = '') {
-  const cell = document.createElement('div');
-  cell.className = 'cell ' + cls;
-  if (cls === 'cell-stroke') {
-    const svg = strokeSvg(name);
-    if (svg) { cell.appendChild(svg); return cell; }
-  }
-  if (name && (cls === 'cell-ref' || cls === 'cell-trace')) {
-    const svg = document.createElementNS(SHEET_NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 1000 1000');
-    svg.setAttribute('aria-hidden', 'true');
-    const t = document.createElementNS(SHEET_NS, 'text');
-    t.setAttribute('x', reading ? '410' : '500');
-    t.setAttribute('y', '500');
-    t.setAttribute('text-anchor', 'middle');
-    t.setAttribute('dominant-baseline', 'central');
-    t.classList.add('cell-glyph');
-    if (reading) t.style.fontSize = '580px';
-    t.textContent = name;
-    svg.appendChild(t);
-    for (const mark of sheetRubyMarks(reading)) {
-      const ruby = document.createElementNS(SHEET_NS, 'text');
-      ruby.setAttribute('x', mark.x);
-      ruby.setAttribute('y', mark.y);
-      ruby.setAttribute('text-anchor', 'middle');
-      ruby.setAttribute('dominant-baseline', 'central');
-      ruby.setAttribute('font-family', 'Bpmf');
-      ruby.setAttribute('font-size', '155');
-      ruby.setAttribute('fill', '#4263eb');
-      ruby.textContent = mark.text;
-      svg.appendChild(ruby);
-    }
-    cell.appendChild(svg);
-  }
-  return cell;
-}
-
-function sheetRow(ch) {
-  const opts = SHEET_OPTIONS;
-  const row = document.createElement('div');
-  row.className = 'ch-row';
-  // 六格全寬（與 A4 同比例，不縮小）
-  const cells = document.createElement('div');
-  cells.className = 'ch-cells';
-  cells.append(sheetCell(ch.name, 'cell-ref', opts.pinyin ? ch.zhuYin : ''));
-  cells.appendChild(opts.stroke ? sheetCell(ch.name, 'cell-stroke') : sheetCell('', 'cell-blank'));
-  cells.append(opts.trace ? sheetCell(ch.name, 'cell-trace') : sheetCell('', 'cell-blank'),
-               sheetCell('', 'cell-blank'), sheetCell('', 'cell-blank'), sheetCell('', 'cell-blank'));
-  row.appendChild(cells);
-  // 學習手冊註解：移到格子下方整行（不擠在右側窄欄，不再把行撐高、行間出現白帶）
-  if (opts.dict) {
-    const d = DICT[ch.name];
-    const reading = bookZyHit(d, ch.zhuYin) || (d && d.readings && d.readings[0]);
-    const radForm = d?.radForm || ch.radical;
-    const info = document.createElement('div');
-    info.className = 'ch-info';
-    info.innerHTML =
-      `<span class="i-meta">${d?.strokes || ch.fullStroke} 筆` +
-      (radForm ? `・部首 ${radForm}` : '') + (ch.type === '認讀字' ? '・認讀字' : '') + '　</span>' +
-      (reading?.defs?.[0]?.d ? `<span class="i-def">${reading.defs[0].d}</span>` : '') +
-      (reading?.ex ? `<span class="i-ex">例：${reading.ex.split('、')[0]}</span>` : '');
-    row.appendChild(info);
-  }
-  return row;
-}
-
-function sheetPageHead(title) {
-  const hd = document.createElement('div');
-  hd.className = 'sheet-hd';
-  hd.innerHTML =
-    `<span class="hd-title">${title}</span><span class="hd-line"></span>` +
-    '<span class="hd-label">姓名：<span class="hd-line"></span></span>';
-  return hd;
-}
-
-function sheetCourses(selection = state, wholeSemester) {
-  // 「整學期」＝同年級同學期全部課次（含特殊單元 0）；否則目前課。
-  // selection／wholeSemester 皆為可選（build 端以明確選課呼叫）；
-  // 不傳時＝頂欄目前選課＋「整學期」核取方塊。
-  const selSel = wholeSemester !== undefined ? wholeSemester : $('sheetGrade').checked;
+function sheetCourses(selection, wholeSemester) {
+  // 建置端明確指定選課；整學期包含特殊單元 0。
   const sem = DATA[selection.version]?.[selection.grade]?.[selection.semester];
   if (!sem) return [];
   const nums = Object.keys(sem).map(Number).sort((a, b) => a - b);
-  const sel = selSel ? nums : [Number(selection.course)];
+  const sel = wholeSemester ? nums : [Number(selection.course)];
   const semName = { '1': '上學期', '2': '下學期' }[selection.semester] || '';
   return sel.filter((n) => sem[n]).map((n) => ({
     title: (n === 0 ? '特殊單元' : `第 ${n} 課`) +
       `　${VERSION_LABELS[selection.version] || selection.version}版・${['', '一', '二', '三', '四', '五', '六'][selection.grade] || selection.grade}年級・${semName}`,
     chars: sem[n].slice(),
   }));
-}
-
-function renderSheet() {
-  const scroll = $('sheetScroll');
-  scroll.innerHTML = '';
-  let total = 0;
-  for (const cr of sheetCourses()) {
-    const rows = cr.chars.map((ch) => { total++; return sheetRow(ch); });
-    for (let i = 0; i < rows.length; i += SHEET_PAGE_CHARS) {
-      const page = document.createElement('section');
-      page.className = 'sheet-page';
-      page.appendChild(sheetPageHead(cr.title));
-      for (const r of rows.slice(i, i + SHEET_PAGE_CHARS)) page.appendChild(r);
-      scroll.appendChild(page);
-    }
-  }
-  $('sheetCount').textContent = total ? `共 ${total} 字・${scroll.querySelectorAll('.sheet-page').length} 頁 A4` : '（此課沒有生字）';
-}
-
-let sheetToken = 0;
-function openSheet() {
-  const tok = ++sheetToken;
-  $('sheet').hidden = false;
-  document.body.style.overflow = 'hidden';
-  // 筆順 SVG 需要 hanzi-data（延遲載入）；先顯示格子，資料落地再補筆順
-  renderSheet();
-  loadHanziData().then(() => { if (tok === sheetToken) { renderSheet(); } });
-}
-function closeSheet() {
-  sheetToken++;
-  $('sheet').hidden = true;
-  document.body.style.overflow = '';
 }
 
 /* ── 事件綁定 ── */
@@ -795,8 +654,7 @@ function bind() {
   bindDictScroll(); // 字典 ▲/▼ 翻頁＋mouse-drag 兜底（見 renderDict 後說明）
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (!$('sheet').hidden) closeSheet();
-      else if (dictBox.open) dictBox.open = false;
+      if (dictBox.open) dictBox.open = false;
       else if (!detail.hidden) closeDetail();
       return;
     }
@@ -830,15 +688,6 @@ function bind() {
   $('btnChoose').addEventListener('click', showSetup);
   $('btnSetup').addEventListener('click', showSetup);
 
-  // 習字本／學習手冊（固定版面；只有「整學期」可選，下載為預產 PDF）
-  $('btnSheet').addEventListener('click', openSheet);
-  $('btnSheetClose').addEventListener('click', closeSheet);
-  $('sheetGrade').addEventListener('change', renderSheet);
-  // 頂欄篩選（版本/年級/學期/課次）變化時，若習字本開著要同步預覽
-  for (const el of [selVersion, selGrade, selSemester, selClass]) {
-    el.addEventListener('change', () => { if (!$('sheet').hidden) renderSheet(); });
-  }
-
   // 字號（整介面等比放大，自動記憶）
   fsCtl.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-fs]');
@@ -849,7 +698,7 @@ function bind() {
 
 /* ── 介面用字加注音（bpmf.js）：只在「學習內容」區域加注音（課次說明、國語辭典）。
    標題／篩選器／按鈕等 UI 標籤不加：注音在狹窄標籤會折行、蓋住文字；
-   生字讀音已顯示在字卡、寫字畫面與習字本，UI 標籤不必重複。 */
+   生字讀音已顯示在字卡與寫字畫面，UI 標籤不必重複。 */
 function annotateUI() {
   const h1 = document.querySelector('.topbar h1');
   if (h1) h1.textContent = '✍️ 手寫練習';
@@ -943,7 +792,6 @@ function applySel(version, grade, semester, course, startPractice) {
 }
 function showSetup() {
   if (!detail.hidden) closeDetail(); // 選課前先關字卡，避免選課後還留著舊字
-  if (!sheet.hidden) closeSheet(); // 選課引導不可被舊習字本遮住，也不保留舊課下載連結。
   renderSetupSteps();
   $('setup').hidden = false;
   $('setup').scrollTop = 0;

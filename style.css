@@ -6,7 +6,7 @@
  *
  * 版面模型（2026-10 整併版，取代舊 landscape≥720px 雙段 override）：
  *   ≥1000px 寬 且 ≥600px 高（--wide 版）：topbar 為左側固定欄，
- *     所有 main/setup/detail/sheet 位於欄右；欄底為宿主
+ *     所有 main/setup/detail 位於欄右；欄底為宿主
  *     Unity「回去／首頁」按鈕保留 ≥ max(110px,15vh) 安全區，
  *     整個左下安全區不得放任何網頁互動元素。
  *   其餘尺寸（窄螢幕，含橫式手機）：全寬單欄、內容可捲動，
@@ -203,7 +203,7 @@ button, select { touch-action: manipulation; }
   flex-shrink: 0;
 }
 
-/* 頂欄主按鈕（選課／習字本） */
+/* 頂欄選課按鈕 */
 .btn-choose { font-size: 0.85rem; padding: 0.4rem 0.85rem; min-height: var(--touch); }
 .app-update { width: 100%; font-size: 0.75rem; color: var(--muted); }
 .app-update summary { cursor: pointer; padding: 0.5rem 0; }
@@ -970,152 +970,8 @@ main {
   .setup-card-course { min-height: 3.7rem; font-size: 0.89rem; }
 }
 
-/* ── 習字本／學習手冊（全螢幕浮層；A4 預覽等比、可捲動）──
-   列印樣式見檔末 @media print（只印 .sheet-page）。 */
-.sheet {
-  position: fixed;
-  inset: 0 0 var(--content-bottom) var(--side-w);
-  z-index: 70;
-  background: #d8d2c8;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  left: var(--side-w);
-}
-.sheet[hidden] { display: none; }
-.sheet-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 0.9rem;
-  align-items: center;
-  padding: 0.5rem 0.9rem;
-  background: var(--card);
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
-}
-.sheet-opt {
-  display: inline-flex;
-  gap: 0.3rem;
-  align-items: center;
-  font-size: 0.85rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.sheet-opt input {
-  width: 1.05rem;
-  height: 1.05rem;
-  accent-color: var(--green);
-}
-.sheet-count { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
-.sheet-format-note {
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.4;
-  max-width: 22rem;
-}
-.sheet-scroll {
-  flex: 1;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 1rem;
-  min-height: 6rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.1rem;
-}
-/* A4 頁：寬＝容器可用寬（min(190mm, 100%)），永不超出視口；
- * 高＝撐滿 scroll 容器（flex-grow），行距由 .ch-row 均分、不留大片白帶。 */
-.sheet-page {
-  width: min(190mm, 100%);
-  flex: 1 0 auto;
-  min-height: 200mm;
-  background: #fff;
-  box-shadow: 0 2px 14px rgba(60, 45, 20, .25);
-  display: flex;
-  flex-direction: column;
-  padding: 7mm 7mm 6mm;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-.sheet-hd {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  border-bottom: 1.5px solid var(--ink);
-  padding-bottom: 0.5mm;
-  margin-bottom: 2mm;
-  font-size: 7.5pt;
-  flex-shrink: 0;
-}
-.sheet-hd .hd-title { font-size: 11pt; font-weight: 700; }
-.sheet-hd .hd-line { flex: 1; border-bottom: 1px dotted var(--muted); }
-.sheet-hd .hd-label { color: var(--muted); }
-/* 頁碼（CSS counter，跨課連續＝習字本頁碼） */
-.sheet-scroll { counter-reset: pg; }
-.sheet-page { counter-increment: pg; }
-.sheet-hd::after {
-  content: "第 " counter(pg) " 頁";
-  color: var(--muted);
-  font-size: 6.8pt;
-  white-space: nowrap;
-}
-/* 一字一組：六格（全寬）在上，學習手冊註解整行在下；
- * 行距均分剩餘頁高（flex-grow），不留大片白帶 */
-.ch-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6mm;
-  flex: 1 0 auto;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-.ch-cells {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 1.2mm;
-}
-.cell {
-  position: relative;
-  border: 0.35mm solid var(--ink);
-  overflow: hidden;
-  aspect-ratio: 1;
-  box-sizing: border-box;
-}
-/* 田字格淡紅十字（範字格與空格） */
-.cell-ref, .cell-blank {
-  background-image:
-    linear-gradient(to right, transparent calc(50% - 0.25mm), #e8b4b4 calc(50% - 0.25mm), #e8b4b4 calc(50% + 0.25mm), transparent calc(50% + 0.25mm)),
-    linear-gradient(to bottom, transparent calc(50% - 0.25mm), #e8b4b4 calc(50% - 0.25mm), #e8b4b4 calc(50% + 0.25mm), transparent calc(50% + 0.25mm));
-}
-.cell svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* 範字／描紅：SVG 文字隨格等比（字體規則維持原樣；
-   範字格內右側直排注音由 app.js 以 inline SVG attrs 設定） */
-.cell-glyph {
-  font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
-  font-size: 640px;
-}
-.cell-ref .cell-glyph { fill: var(--ink); }
-.cell-trace .cell-glyph { fill: rgba(60, 60, 60, .30); }
-.cell-stroke svg path {
-  fill: rgba(212, 56, 13, .40);
-  stroke: none;
-}
-/* 學習手冊註解：整行、單行收斂（釋義截斷），行高由六格主導、不再出現白帶 */
-.ch-info {
-  font-size: 6.6pt;
-  line-height: 1.3;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ch-info .i-zy { font-size: 8pt; color: var(--zy); font-weight: 700; }
-.ch-info .i-meta { font-size: 6.8pt; color: var(--muted); }
-.ch-info .i-ex { color: var(--accent); }
-
 /* ══ 寬版：≥1000px 且 ≥600px（桌面/橫平板）══════════════════════
-   topbar 轉為左側固定欄；所有 main/setup/detail/sheet 位於欄右。
+   topbar 轉為左側固定欄；所有 main/setup/detail 位於欄右。
    欄底為宿主 Unity「回去／首頁」按鈕保留 ≥ max(110px,15vh) 安全區，
    整個左下安全區不放任何網頁互動元素（topbar 內容一律頂對齊堆疊、
    超欄高時向上捲動，可見底緣恒在保留帶之上）。 */
@@ -1236,32 +1092,6 @@ main {
   /* 操作列在左欄：三主鈕直排大鈕 */
   .practice-primary .btn { min-height: var(--touch); font-size: 1.05rem; }
 
-  /* ── 習字本：右移側欄；一列並排兩頁 A4（190:266 比例）──
-     用 flex-wrap：grid auto 列對 aspect-ratio 子項量高時寬度未定會崩縮；
-     頁面寬＝min(半欄, 可用高×比例) → 整頁不壓左下保留帶 */
-  .sheet-scroll {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-content: flex-start;
-    justify-content: center;
-    gap: 1rem;
-    padding: 1rem 1.1rem calc(var(--host-zone-height) + env(safe-area-inset-bottom));
-  }
-  .sheet-page {
-    width: min(calc((100% - 1rem) / 2), calc((100dvh - var(--host-zone-height) - 5.6rem) * 190 / 266));
-    flex: none;
-    min-height: 0;
-    aspect-ratio: 190 / 266;
-  }
-  /* 一頁 8 字在矮橫式視口（≈758px 高）放不下全寬格子：
-     表頭/內距/註解為固定 mm・pt 不隨頁縮；每列＝格子＋列距＋註解。
-     格子寬＝min(軌道寬, 每列可用高)；每列可用高＝
-     （視口高−保留帶−工具列 5.6rem−表頭＋頁內距＋8×列距註解 11.3rem）÷8。
-     列印走 @media print，不受影響 */
-  .sheet-page .cell {
-    width: min(100%, calc((100dvh - var(--host-zone-height) - 16.9rem) / 8));
-    justify-self: center;
-  }
 }
 
 /* 中寬平板（720–999px）：寫字頁頭部放大、畫布加大 */
@@ -1283,27 +1113,3 @@ main {
   .practice-primary .btn { font-size: 0.8rem; padding: 0.4rem 0.15rem; }
 }
 
-/* ══ 列印：只印習字本（A4、每課一頁）════════════════════════════
-   display 隱藏其餘元素＋.sheet 常態流內：手機與桌面的「列印／儲存 PDF」
-   皆可正常跨頁（舊式 visibility:hidden＋固定浮層會被裁切成一視口高）。 */
-@media print {
-  @page { size: A4; margin: 10mm 9mm; }
-  body, .handwriting-app { background: #fff; height: auto; display: block; overflow: visible; }
-  body > *:not(.sheet) { display: none !important; }
-  .sheet { position: static; display: block; background: #fff; overflow: visible; left: 0; }
-  .sheet-bar, .no-print { display: none !important; }
-  .sheet-scroll { overflow: visible; padding: 0; background: #fff; display: block; }
-  .sheet-page {
-    width: 100%;
-    min-height: 0;
-    aspect-ratio: 210 / 297;
-    box-shadow: none;
-    margin: 0;
-    page-break-after: always;
-    break-after: page;
-    padding: 4mm 3mm 4mm;
-  }
-  /* 寬版 media 可能仍命中、格子會縮小：復原全寬（A4 縱向 8 列放得下） */
-  .sheet-page .cell { width: 100%; justify-self: stretch; }
-  .sheet-page:last-child { page-break-after: auto; break-after: auto; }
-}
