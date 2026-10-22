@@ -82,8 +82,8 @@
     const cell = (cw - cellGap * 5) / 6;            // 31.67mm
     const infoH = opts.dict ? mm(6.6 * PT) * 1.3 : 0;
     const infoGap = opts.dict ? mm(0.6) : 0;
-    const n = g.chars.length;
-    const rowH = (H - padB - rowsTop + mm(0.6) * (n - 1)) / n;  // flex 均分
+    // 所有頁固定以八列計算格子與列距；未滿頁由上往下排，空白只留在頁尾。
+    const rowH = (H - padB - rowsTop) / SHEET_PAGE_CHARS;
     const cellF = Math.min(cell, rowH - infoH - infoGap);
     const total = cellF * 6 + cellGap * 5;
     const ox = padL + Math.floor((cw - total) / 2);
