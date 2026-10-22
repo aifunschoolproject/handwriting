@@ -1,6 +1,6 @@
 /* 發布時同步更新 index.html 的 app-version 與有變更資源的 v。
  * 版本檢查不使用 HTTP 快取；更新只重新載入頁面，不清除 localStorage。
- * 不在孩子書寫或等待 App 儲存回報時自動重新載入。 */
+ * 進站、返回前景、恢復連線及前景每分鐘檢查；有新版直接更新，未完成筆畫會中斷。 */
 (() => {
   'use strict';
   const version = document.querySelector('meta[name="app-version"]').content;
@@ -14,8 +14,8 @@
 
   async function checkVersion(force = false, manual = false) {
     if (busy || (!manual && Date.now() - checkedAt < 60000)) return;
-    if (force && !window.confirm('重新載入最新版？已完成的練習紀錄會保留；未完成的筆畫不會保留。若 PDF 正在儲存，請先等候 App 回報再更新。')) return;
     busy = true;
+    checkedAt = Date.now();
     check.disabled = reload.disabled = true;
     if (manual) status.textContent = '正在連線檢查最新版…';
     const controller = new AbortController();
@@ -30,16 +30,18 @@
       const html = new DOMParser().parseFromString(await response.text(), 'text/html');
       const latest = html.querySelector('meta[name="app-version"]')?.content;
       if (!latest || !html.querySelector('#btnStart')) throw new Error('版本資訊無效');
-      checkedAt = Date.now();
-      if (force) {
-        status.textContent = '正在載入最新版…';
+      if (force || latest.localeCompare(version, undefined, { numeric: true }) > 0) {
+        // 防止宿主忽略快取參數、重新導向後仍回傳舊 HTML 時無限重載。
+        if (!force && new URL(location.href).searchParams.get('_appVersion') === latest) {
+          status.textContent = `新版 ${latest} 尚未載入成功，請稍後按「強制更新」。練習紀錄仍保留。`;
+          panel.open = true;
+          return;
+        }
+        status.textContent = `正在自動更新至 ${latest}，已完成的練習紀錄會保留…`;
+        url.searchParams.set('_appVersion', latest);
         location.replace(url.href);
-      } else if (latest !== version) {
-        status.textContent = `新版 ${latest} 已上線。更新會保留已完成的練習紀錄。`;
-        reload.textContent = '立即更新';
-        panel.open = true;
       } else {
-        status.textContent = `目前已是最新版：${version}`;
+        status.textContent = `目前版本：${version}，已啟用自動更新。`;
         reload.textContent = '強制更新';
       }
     } catch {
@@ -53,9 +55,20 @@
   }
   check.addEventListener('click', () => checkVersion(false, true));
   reload.addEventListener('click', () => checkVersion(true, true));
-  window.addEventListener('pageshow', () => checkVersion());
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkVersion();
+  const resumeCheck = () => {
+    checkedAt = 0;
+    checkVersion();
+  };
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) resumeCheck();
+    else checkVersion();
   });
+  window.addEventListener('online', resumeCheck);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resumeCheck();
+  });
+  setInterval(() => {
+    if (document.visibilityState === 'visible') checkVersion();
+  }, 60000);
   checkVersion();
 })();
