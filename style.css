@@ -1013,48 +1013,6 @@ main {
   line-height: 1.4;
   max-width: 22rem;
 }
-/* App 儲存按鈕沒有 href；橋接未就緒也不會導向 PDF 或外開程式。 */
-.btn-sheet-dl {
-  display: inline-block;
-  text-decoration: none;
-  color: #fff;
-  font-size: 1.05rem;
-  font-weight: 700;
-  text-align: center;
-  min-height: var(--touch);
-  white-space: nowrap;
-}
-.btn-sheet-dl:focus-visible { outline-color: #7fd4c5; }
-.sheet-save-status {
-  flex-basis: 100%;
-  margin: 0.2rem 0;
-  padding: 0.5rem;
-  border-left: 0.2rem solid var(--green);
-  background: var(--green-soft);
-  font-size: 0.8rem;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.btn-sheet-dl:disabled { opacity: 0.65; cursor: wait; }
-.sheet-browser-download { flex-basis: 100%; font-size: 0.75rem; }
-.sheet-browser-download:not([open]) > p,
-.sheet-browser-download:not([open]) > a { display: none; }
-.sheet-browser-download summary {
-  min-height: var(--touch);
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  color: var(--green);
-}
-.sheet-browser-download summary::before { content: "▸ "; }
-.sheet-browser-download[open] summary::before { content: "▾ "; }
-.sheet-browser-download p { margin: 0.3rem 0; line-height: 1.5; }
-.sheet-browser-download a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  color: var(--green);
-}
 .sheet-scroll {
   flex: 1;
   overflow: auto;

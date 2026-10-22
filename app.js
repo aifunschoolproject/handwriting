@@ -5,7 +5,7 @@
  *   唸字功能已移除（內嵌瀏覽器無 TTS）；注音改為版面顯示
  *   HanziWriter（筆順動畫＋逐筆練習）
  *   習字本 PDF：靜態預產（scripts/build-pdfs.mjs + scripts/pdf-renderer.js）
- *   存放於 downloads/worksheets/，app 端只預覽版面＋以 <a> 連結下載。
+ *   存放於 downloads/worksheets/；網頁只保留預覽，不提供下載或呼叫 App 儲存。
  * DATA[版本][年級 1..6][學期 1|2][課次 '0'=特殊單元,'1'..'12'] = [{name,zhuYin,fullStroke,radical,type}]
  * ──────────────────────────────────────────────────────── */
 'use strict';
@@ -18,7 +18,7 @@ const DICT = window.HANDWRITING_DICT || {};
 /* ── 習字本 PDF（靜態預產）────────────────────────────
  * 版面固定全開（筆順／注音／釋義例詞／描紅格皆含），
  * 檔案由 build 端（scripts/pdf-renderer.js）預產到
- * downloads/worksheets/；app 端預覽同一版面、以 <a> 連結下載。 */
+ * downloads/worksheets/；網頁保留同一版面預覽，PDF 產生與檔案仍保留。 */
 // 固定版面選項（build 與 app 共用；公開頁面已無選項開關）。
 const SHEET_OPTIONS = Object.freeze({ stroke: true, pinyin: true, dict: true, trace: true });
 const SHEET_SLUG = { '南一': 'nanyi', '康軒': 'kangxuan', '翰林': 'hanlin' };
@@ -765,118 +765,12 @@ function openSheet() {
   document.body.style.overflow = 'hidden';
   // 筆順 SVG 需要 hanzi-data（延遲載入）；先顯示格子，資料落地再補筆順
   renderSheet();
-  refreshSheetDownload();
   loadHanziData().then(() => { if (tok === sheetToken) { renderSheet(); } });
 }
 function closeSheet() {
   sheetToken++;
   $('sheet').hidden = true;
   document.body.style.overflow = '';
-}
-// App 儲存使用 afs-aps2 的 SaveMessageRouter：
-// {type:'save', name, b64} → DownloadsStore → hwSaveAck({ok})。
-// 主操作是 button，橋接缺席或延遲時絕不退回 URL 導航；獨立瀏覽器下載須另行點選。
-// 回覆沒有 request id：同時只允許一筆；逾時保留待確認狀態，避免晚到回覆認錯檔案。
-const sheetDl = $('sheetDownload');
-const sheetBrowserDl = $('sheetBrowserDownload');
-let sheetSaveRequest = null;
-function sheetSaveStatus(text) {
-  const status = $('sheetSaveStatus');
-  status.hidden = false;
-  status.textContent = text;
-}
-
-function waitForSaveBridge() {
-  if (typeof window.vuplex?.postMessage === 'function') return Promise.resolve(window.vuplex);
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      clearTimeout(timer);
-      window.removeEventListener('vuplexready', ready);
-    };
-    const ready = () => {
-      if (typeof window.vuplex?.postMessage !== 'function') return;
-      cleanup();
-      resolve(window.vuplex);
-    };
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('找不到 App 儲存介面，沒有啟動下載或開啟外部連結。請確認 App 版本；若使用 Chrome／Edge，請改用「一般瀏覽器下載」'));
-    }, 5000);
-    window.addEventListener('vuplexready', ready);
-    ready();
-  });
-}
-
-window.hwSaveAck = (result) => {
-  const request = sheetSaveRequest;
-  if (!request?.waiting || typeof result?.ok !== 'boolean') return;
-  clearTimeout(request.timer);
-  sheetSaveRequest = null;
-  refreshSheetDownload();
-  sheetSaveStatus(result.ok
-    ? `App 已回報儲存成功：${request.name}。請開啟平板「我的檔案／檔案」→「下載（Download）」查看。`
-    : `App 回報儲存失敗：${request.name}。本次未確認存檔成功；請將此畫面交給 App 維護者檢查原生存檔程式。`);
-};
-
-async function saveSheetPdf(event) {
-  event.preventDefault();
-  if (sheetSaveRequest || !sheetBrowserDl.hasAttribute('href')) return;
-  const request = { name: sheetBrowserDl.download, waiting: false, timer: null };
-  const url = sheetBrowserDl.href;
-  sheetSaveRequest = request;
-  refreshSheetDownload();
-  sheetSaveStatus('正在連接 App 儲存介面，請稍候…');
-  const controller = new AbortController();
-  const fetchTimer = setTimeout(() => controller.abort(), 60000);
-  try {
-    const bridge = await waitForSaveBridge();
-    sheetSaveStatus(`正在取得 ${request.name}，請稍候…`);
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) throw new Error(`PDF 連線失敗（HTTP ${response.status}）`);
-    const pdf = await response.blob();
-    if (await pdf.slice(0, 5).text() !== '%PDF-') throw new Error('伺服器未回傳有效的 PDF');
-    const b64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
-      reader.onerror = () => reject(new Error('無法讀取 PDF 內容'));
-      reader.readAsDataURL(pdf);
-    });
-    request.waiting = true;
-    sheetSaveStatus(`正在請 App 儲存 ${request.name}，等待儲存結果…`);
-    request.timer = setTimeout(() => {
-      sheetSaveStatus(`已送出 ${request.name} 的儲存要求，但 App 尚未回報，不能確認檔案已儲存。請先查看平板「檔案」→「下載」；若找不到，需由 App 維護者檢查儲存介面。收到回報前不重複送出。`);
-    }, 30000);
-    bridge.postMessage(JSON.stringify({ type: 'save', name: request.name, b64 }));
-  } catch (error) {
-    clearTimeout(request.timer);
-    sheetSaveRequest = null;
-    refreshSheetDownload();
-    sheetSaveStatus(`尚未完成儲存：${error.name === 'AbortError' ? '取得 PDF 逾時，請確認網路後再試' : error.message}。`);
-  } finally {
-    clearTimeout(fetchTimer);
-  }
-}
-function refreshSheetDownload() {
-  const total = sheetCourses().reduce((n, c) => n + c.chars.length, 0);
-  if (!total) {
-    sheetBrowserDl.removeAttribute('href');
-    sheetBrowserDl.removeAttribute('download');
-    sheetBrowserDl.textContent = '此課沒有生字';
-    sheetDl.textContent = '此課沒有生字';
-    sheetDl.disabled = true;
-    return;
-  }
-  const whole = $('sheetGrade').checked;
-  const ver = VERSION_LABELS[state.version] || state.version;
-  const semName = state.semester === '1' ? '上學期' : '下學期';
-  const scope = whole ? '整學期' : (state.course === '0' ? '特殊單元' : `第${state.course}課`);
-  const url = new URL(worksheetPath(state, whole), document.baseURI);
-  url.searchParams.set('v', document.querySelector('meta[name="app-version"]').content);
-  sheetBrowserDl.href = url.href;
-  sheetBrowserDl.download = `習字本_${ver}_${state.grade}年${semName}_${scope}.pdf`;
-  sheetBrowserDl.textContent = whole ? '下載整學期 PDF' : '下載本課 PDF';
-  sheetDl.textContent = sheetSaveRequest ? '處理儲存中…' : (whole ? '儲存整學期 PDF' : '儲存本課 PDF');
-  sheetDl.disabled = !!sheetSaveRequest;
 }
 
 /* ── 事件綁定 ── */
@@ -939,19 +833,10 @@ function bind() {
   // 習字本／學習手冊（固定版面；只有「整學期」可選，下載為預產 PDF）
   $('btnSheet').addEventListener('click', openSheet);
   $('btnSheetClose').addEventListener('click', closeSheet);
-  $('sheetGrade').addEventListener('change', () => { renderSheet(); refreshSheetDownload(); });
-  sheetDl.addEventListener('click', saveSheetPdf);
-  sheetBrowserDl.addEventListener('click', (event) => {
-    if (sheetSaveRequest || window.vuplex || !sheetBrowserDl.hasAttribute('href')) {
-      event.preventDefault();
-      sheetSaveStatus('App 內請使用「儲存 PDF」。一般瀏覽器下載僅供 Chrome／Edge 等獨立瀏覽器使用；本次沒有開啟外部連結。');
-      return;
-    }
-    sheetSaveStatus('您已選擇一般瀏覽器下載。請查看瀏覽器的下載清單；這不代表 App 已完成存檔。');
-  });
-  // 頂欄篩選（版本/年級/學期/課次）變化時，若習字本開著要同步預覽與下載連結
+  $('sheetGrade').addEventListener('change', renderSheet);
+  // 頂欄篩選（版本/年級/學期/課次）變化時，若習字本開著要同步預覽
   for (const el of [selVersion, selGrade, selSemester, selClass]) {
-    el.addEventListener('change', () => { if (!$('sheet').hidden) { renderSheet(); refreshSheetDownload(); } });
+    el.addEventListener('change', () => { if (!$('sheet').hidden) renderSheet(); });
   }
 
   // 字號（整介面等比放大，自動記憶）
