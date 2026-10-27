@@ -606,14 +606,13 @@ function stepChar(delta) {
 
 
 /* ── PDF 建置共用資料（無網頁預覽介面）───────────── */
-const SHEET_PAGE_CHARS = 8;
-// PDF 的 1000×1000 格內座標，聲調在右、輕聲在上。
+// PDF 格內座標：依教育部手冊，調號位於末符右上，輕聲在整個字音上方。
 function sheetRubyMarks(reading) {
   const { bopo, tone, light } = bpmfParts(reading);
   const symbols = [...bopo];
   const top = 500 - (symbols.length - 1) * 150 / 2;
   const marks = symbols.map((text, i) => ({ text, x: 800, y: top + i * 150 }));
-  if (tone) marks.push({ text: tone, x: 925, y: 500 });
+  if (tone) marks.push({ text: tone, x: 925, y: top + (symbols.length - 1) * 150 - 75 });
   if (light) marks.push({ text: light, x: 800, y: top - 140 });
   return marks;
 }

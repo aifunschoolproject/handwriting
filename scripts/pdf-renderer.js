@@ -1,15 +1,15 @@
 /* ── 習字本 PDF 產生器（build-only）──────────────────────────────
  * 供 scripts/build-pdfs.mjs 在 Playwright 中注入使用，公開頁面不引用：
- *   載入順序＝app.js（先）→ jspdf.umd.min.js → 本檔（最後）。
- * 固定 A4 版面使用專案字型與 1000×1000 格內筆順／注音座標，
- * 逐頁以 canvas 繪製，再由 jsPDF 組裝；不依賴網頁預覽 DOM 或樣式。
+ *   載入順序＝app.js → pdf-annotations.js → jspdf.umd.min.js → 本檔。
+ * A4 六格習字列搭配 14pt 註解與右側 6pt 注音，依實際內容高度分頁。
+ * 註解不截斷、不平均撐開列距；教育部讀音資料由 build-pdf-annotations 產生。
  *
  * buildWorksheetPdf({ version, grade, semester, course }) →
  *   Promise<{ b64, pageCount }>；course＝null 或 'semester'＝整學期
  *   全部課次（含特殊單元 0，等同 app 的 sheetCourses(sel, true)）。
  * 依賴 app 的全域（同 global scope，bare 存取）：
- *   DICT / SHEET_OPTIONS / SHEET_PAGE_CHARS /
- *   sheetCourses / bookZyHit / sheetRubyMarks / loadHanziData
+ *   SHEET_OPTIONS / WORKSHEET_ANNOTATIONS /
+ *   sheetCourses / sheetRubyMarks / loadHanziData / bpmfParts
  * 以及 window.HANZI_DATA（hanzi-data.js 設定）、window.jspdf（jsPDF UMD）。
  * 失敗一律 throw，不產出假檔。 */
 (() => {
@@ -43,28 +43,143 @@
     return out.length ? out : null;
   }
 
-  function truncPx(ctx, text, max) {
-    if (ctx.measureText(text).width <= max) return text;
-    let t = text;
-    while (t.length && ctx.measureText(t + '…').width > max) t = t.slice(0, -1);
-    return t + '…';
+  const SCALE = 8;
+  const POINT = 25.4 / 72 * SCALE;
+  const TEXT_SIZE = 14 * POINT;
+  const RUBY_SIZE = 6 * POINT;
+  const LINE_HEIGHT = 24 * POINT;
+  const WIDTH = 1680, HEIGHT = 2376;
+  const PAD = 7 * SCALE, BOTTOM = 6 * SCALE;
+  const CONTENT_WIDTH = WIDTH - PAD * 2;
+  const CELL_GAP = 1.2 * SCALE;
+  const CELL_SIZE = (CONTENT_WIDTH - CELL_GAP * 5) / 6;
+  const ROWS_TOP = PAD + 11 * POINT * 1.36 + 0.5 * SCALE + 1.5 + 2 * SCALE;
+  const INFO_GAP = 1.2 * SCALE, ROW_GAP = 2 * SCALE;
+  const rowCache = new Map();
+  const measure = document.createElement('canvas').getContext('2d');
+  const recognitionLabel = [
+    { text: '，', reading: '' }, { text: '認', reading: 'ㄖㄣˋ' },
+    { text: '讀', reading: 'ㄉㄨˊ' }, { text: '字', reading: 'ㄗˋ' },
+  ];
+
+  function wrapAnnotation(sections) {
+    measure.font = `400 ${TEXT_SIZE}px ${KA}`;
+    const lines = [];
+    for (const section of sections) {
+      let tokens = [], width = 0;
+      for (const token of section.tokens) {
+        const glyphWidth = measure.measureText(token.text).width;
+        const item = { ...token, glyphWidth,
+          width: glyphWidth + (token.reading ? RUBY_SIZE * 1.7 : 0) + 2 };
+        if (width + item.width > CONTENT_WIDTH && tokens.length) {
+          const carry = [];
+          // 行首不放句末標點，行尾不留開括號；不以裁切或縮小字體處理。
+          if (/^[，。！？；：、）」』》】]$/.test(item.text) ||
+              /^[（「『《【]$/.test(tokens[tokens.length - 1].text)) {
+            carry.push(tokens.pop());
+          }
+          if (tokens.length) lines.push({ kind: section.kind, tokens });
+          tokens = carry;
+          width = carry.reduce((sum, t) => sum + t.width, 0);
+        }
+        tokens.push(item);
+        width += item.width;
+      }
+      if (tokens.length) lines.push({ kind: section.kind, tokens });
+    }
+    return lines;
   }
 
-  // 繪一頁習字本到 canvas（g：course 資料＋該頁字元）。
-  // A4 全幅（210×297mm）：S＝8px/mm、1680×2376px，
-  // 內距 7/7/6mm、pt→mm 用 25.4/72、六格高度受限使 8 列全部入版。
-  // 表頭＝11pt 粗體標題行＋姓名/頁碼 baseline 對齊＋1px dotted＋0.5mm padding-bottom＋1.5px 墨線＋2mm margin。
-  // 註解：「N 筆・部首 X」6.8pt 灰＋釋義 6.6pt＋例詞 6.6pt 橙，
-  // 整行 nowrap、釋義截斷不溢出、左緣對齊第一格。
+  function layoutRow(ch) {
+    const key = `${ch.name}\t${ch.zhuYin}`;
+    const cacheKey = `${key}\t${ch.type}`;
+    if (rowCache.has(cacheKey)) return rowCache.get(cacheKey);
+    const annotation = window.WORKSHEET_ANNOTATIONS?.[key];
+    if (!annotation?.reading || !annotation.sections?.length) {
+      throw new Error(`缺少經核對的教育部註解資料：${key}`);
+    }
+    const sections = annotation.sections.map((section) => ({
+      kind: section.kind,
+      tokens: section.kind === 'meta' && ch.type === '認讀字'
+        ? [...section.tokens, ...recognitionLabel] : section.tokens,
+    }));
+    const lines = SHEET_OPTIONS.dict ? wrapAnnotation(sections) : [];
+    const height = CELL_SIZE + (lines.length ? INFO_GAP + lines.length * LINE_HEIGHT : 0);
+    if (height > HEIGHT - BOTTOM - ROWS_TOP) {
+      throw new Error(`單字註解超過一頁，請檢查教育部來源：${key}`);
+    }
+    const row = { ch, reading: annotation.reading, lines, height };
+    rowCache.set(cacheKey, row);
+    return row;
+  }
+
+  async function planPages(sel) {
+    await ensureFonts();
+    const { version, grade, semester, course } = sel || {};
+    if (!version || !grade || !semester) throw new Error('缺少 version/grade/semester');
+    const whole = course === null || course === undefined || course === 'semester';
+    const courses = sheetCourses({ version, grade, semester, course: whole ? '1' : String(course) }, whole);
+    const pages = [];
+    for (const c of courses) {
+      let rows = [], used = 0;
+      for (const ch of c.chars) {
+        const row = layoutRow(ch);
+        const gap = rows.length ? ROW_GAP : 0;
+        if (rows.length && used + gap + row.height > HEIGHT - BOTTOM - ROWS_TOP) {
+          pages.push({ title: c.title, rows });
+          rows = [];
+          used = 0;
+        }
+        used += (rows.length ? ROW_GAP : 0) + row.height;
+        rows.push(row);
+      }
+      if (rows.length) pages.push({ title: c.title, rows });
+    }
+    if (!pages.length) throw new Error('沒有可繪製的生字');
+    return pages;
+  }
+
+  window.worksheetPdfPageCount = async (sel) => (await planPages(sel)).length;
+
+  function drawAnnotation(ctx, lines, left, top) {
+    ctx.textBaseline = 'middle';
+    for (const line of lines) {
+      let x = left;
+      const y = top + LINE_HEIGHT / 2;
+      for (const token of line.tokens) {
+        ctx.font = `400 ${TEXT_SIZE}px ${KA}`;
+        ctx.fillStyle = line.kind === 'example' ? '#94420b' : '#33302c';
+        ctx.textAlign = 'left';
+        ctx.fillText(token.text, x, y);
+        if (token.reading) {
+          const { bopo, tone, light } = bpmfParts(token.reading);
+          const symbols = [...bopo];
+          const rubyX = x + token.glyphWidth + RUBY_SIZE * 0.55;
+          const rubyTop = y - (symbols.length - 1) * RUBY_SIZE / 2;
+          ctx.font = `400 ${RUBY_SIZE}px ${ZY}`;
+          ctx.fillStyle = '#3155a0';
+          ctx.textAlign = 'center';
+          symbols.forEach((symbol, i) => ctx.fillText(symbol, rubyX, rubyTop + i * RUBY_SIZE));
+          // 教育部《國語注音符號手冊》：四聲在末符右上，輕聲在字音上方。
+          if (tone) ctx.fillText(tone, rubyX + RUBY_SIZE * 0.8,
+            rubyTop + (symbols.length - 1) * RUBY_SIZE - RUBY_SIZE * 0.5);
+          if (light) ctx.fillText(light, rubyX, rubyTop - RUBY_SIZE * 0.85);
+        }
+        x += token.width;
+      }
+      top += LINE_HEIGHT;
+    }
+  }
+
+  // 六格尺寸不因頁面字數改變；註解自動換行，逐列緊接排列。
   function drawSheetPage(cv, g) {
     const ctx = cv.getContext('2d');
     const S = 8;                         // px/mm
     const mm = (v) => v * S;             // mm→px
     const PT = 25.4 / 72;                // mm/pt
     const W = 1680, H = 2376;            // A4 @8px/mm
-    const padT = mm(7), padL = mm(7), padB = mm(6), padR = mm(7);
-    const cw = W - padL - padR;          // 196mm 內容寬（210−2×7）
-    const ink = '#33302c', muted = '#8a8378', blue = '#4263eb', accent = '#e8590c';
+    const padT = mm(7), padL = mm(7), padR = mm(7);
+    const ink = '#33302c', muted = '#8a8378', blue = '#4263eb';
     const F = (ptv, w) => `${w || 400} ${mm(ptv * PT)}px ${KA}`;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#ffffff';
@@ -77,16 +192,9 @@
     const dotY = baseY;
     const ruleY = padT + titleH + mm(0.5) + 1.5;
     const rowsTop = ruleY + mm(2);
-    // 六格＝全寬（寬度受限）、註解行高 6.6pt×1.3
-    const cellGap = mm(1.2);
-    const cell = (cw - cellGap * 5) / 6;            // 31.67mm
-    const infoH = opts.dict ? mm(6.6 * PT) * 1.3 : 0;
-    const infoGap = opts.dict ? mm(0.6) : 0;
-    // 所有頁固定以八列計算格子與列距；未滿頁由上往下排，空白只留在頁尾。
-    const rowH = (H - padB - rowsTop) / SHEET_PAGE_CHARS;
-    const cellF = Math.min(cell, rowH - infoH - infoGap);
-    const total = cellF * 6 + cellGap * 5;
-    const ox = padL + Math.floor((cw - total) / 2);
+    const cellGap = CELL_GAP;
+    const cellF = CELL_SIZE;
+    const ox = padL;
     // ── 表頭 ──
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
     ctx.fillStyle = ink; ctx.font = F(11, 700);
@@ -110,7 +218,8 @@
     ctx.beginPath(); ctx.moveTo(padL, ruleY); ctx.lineTo(W - padR, ruleY); ctx.stroke();
     // ── 各列 ──
     let y = rowsTop;
-    for (const ch of g.chars) {
+    for (const row of g.rows) {
+      const ch = row.ch;
       for (let i = 0; i < 6; i++) {
         const cx0 = ox + i * (cellF + cellGap);
         ctx.fillStyle = '#ffffff';
@@ -128,7 +237,7 @@
         ctx.strokeRect(cx0 + mm(0.35) / 2, y + mm(0.35) / 2, cellF - mm(0.35), cellF - mm(0.35));
       }
       // 範字與右側注音使用固定格內座標；關閉注音時範字恢復置中。
-      const rubyMarks = opts.pinyin ? sheetRubyMarks(ch.zhuYin) : [];
+      const rubyMarks = opts.pinyin ? sheetRubyMarks(row.reading) : [];
       ctx.fillStyle = ink;
       ctx.font = `400 ${Math.round(cellF * (rubyMarks.length ? 0.58 : 0.64))}px ${KA}`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -170,34 +279,8 @@
         ctx.font = `400 ${Math.round(cellF * 0.64)}px ${KA}`;
         ctx.fillText(ch.name, cx0 + cellF / 2, y + cellF / 2);
       }
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      // 註解：整行 baseline 對齊、左緣＝第一格
-      const iy = y + cellF + infoGap + infoH * 0.7;
-      if (opts.dict) {
-        const d = DICT[ch.name];
-        const reading = g.readings && g.readings[ch.name];
-        const radForm = (d && d.radForm) || ch.radical;
-        const def = reading && reading.defs && reading.defs[0] && reading.defs[0].d;
-        const ex = reading && reading.ex ? `例：${reading.ex.split('、')[0]}` : '';
-        let ix = ox;
-        const meta = `${(d && d.strokes) || ch.fullStroke} 筆` +
-          (radForm ? `・部首 ${radForm}` : '') + (ch.type === '認讀字' ? '・認讀字' : '');
-        ctx.font = F(6.6);
-        const exW = ex ? ctx.measureText(ex).width + mm(1) : 0;
-        const maxDef = W - padR - ix - exW;
-        ctx.fillStyle = muted; ctx.font = F(6.8);
-        const mt = truncPx(ctx, meta, maxDef);
-        ctx.fillText(mt, ix, iy);
-        ix += ctx.measureText(mt).width + (def ? mm(1) : 0);
-        if (def) {
-          ctx.fillStyle = ink; ctx.font = F(6.6);
-          const dt = truncPx(ctx, def, maxDef);
-          ctx.fillText(dt, ix, iy);
-          ix += ctx.measureText(dt).width;
-        }
-        if (ex) { ctx.fillStyle = accent; ctx.font = F(6.6); ctx.fillText(ex, ix, iy); }
-      }
-      y += rowH;
+      if (opts.dict) drawAnnotation(ctx, row.lines, ox, y + cellF + INFO_GAP);
+      y += row.height + ROW_GAP;
     }
   }
 
@@ -221,30 +304,15 @@
 
   window.buildWorksheetPdf = async function buildWorksheetPdf(sel) {
     if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('jsPDF 未注入（先載入 jspdf.umd.min.js）');
-    const { version, grade, semester, course } = sel || {};
-    if (!version || !grade || !semester) throw new Error('缺少 version/grade/semester');
-    const semSel = course === null || course === undefined || course === 'semester';
-    const selForData = { version, grade, semester, course: semSel ? '1' : String(course) };
+    const pages = await planPages(sel);
     const opts = SHEET_OPTIONS;
-    if (!opts) throw new Error('SHEET_OPTIONS 未定義（app 代碼未先載入）');
-    const courses = sheetCourses(selForData, semSel).filter((c) => c.chars.length);
-    if (!courses.length) throw new Error(`沒有可繪製的生字：${version}/${grade}/${semester}/${course}`);
-
-    // 發布使用專案內完整筆順包，避免 CDN 狀態改變產物或產生空白筆順格。
     if (opts.stroke) {
       const ok = await loadHanziData();
       if (!ok || !window.HANZI_DATA) throw new Error('本機筆順資料載入失敗');
-      const names = new Set(courses.flatMap((c) => c.chars.map((ch) => ch.name)));
+      const names = new Set(pages.flatMap((page) => page.rows.map((row) => row.ch.name)));
       const missing = [...names].filter((name) => !window.HANZI_DATA[name]?.strokes?.length);
-      if (missing.length) throw new Error(`筆順資料缺字，請先更新 hanzi-data.js：${missing.join('、')}`);
+      if (missing.length) throw new Error(`筆順資料缺字：${missing.join('、')}`);
     }
-    // 每字一頁內註解資料（課本音比對，與 app 相同）
-    const readings = {};
-    for (const c of courses) for (const ch of c.chars) {
-      const d = DICT[ch.name];
-      readings[ch.name] = bookZyHit(d, ch.zhuYin) || (d && d.readings && d.readings[0]);
-    }
-    await ensureFonts();
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
@@ -253,22 +321,19 @@
     let pg = 0, first = true;
     const tick = () => new Promise((r) => setTimeout(r, 0));
     try {
-      for (const c of courses) {
-        const rows = c.chars;
-        for (let i = 0; i < rows.length; i += SHEET_PAGE_CHARS) {
-          pg++;
-          drawSheetPage(cv, { title: c.title, pg, chars: rows.slice(i, i + SHEET_PAGE_CHARS), opts, readings });
-          if (!first) pdf.addPage();
-          first = false;
-          const image = cv.toDataURL('image/jpeg', 0.92);
-          pdf.addImage(image, 'JPEG', 0, 0, 210, 297);
-          await tick(); // 每頁讓出主線程，長學期不凍結
-        }
+      for (const page of pages) {
+        pg++;
+        drawSheetPage(cv, { ...page, pg, opts });
+        if (!first) pdf.addPage();
+        first = false;
+        // 203 dpi、0.82 JPEG：保留大字與注音辨識度，控制整批 Pages 發布容量。
+        const image = cv.toDataURL('image/jpeg', 0.82);
+        pdf.addImage(image, 'JPEG', 0, 0, 210, 297);
+        await tick();
       }
     } finally {
       cv.width = cv.height = 1; // 釋放 canvas 記憶體
     }
-    if (!pg) throw new Error(`沒有可繪製的生字：${selForData.version}/${selForData.grade}/${selForData.semester}`);
     const b64 = pdf.output('datauristring').split(',')[1];
     if (!b64) throw new Error('jsPDF 輸出為空');
     return { b64, pageCount: pg };

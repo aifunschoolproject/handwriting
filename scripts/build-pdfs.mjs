@@ -3,9 +3,9 @@
  * 流程（順序執行、單一 Chromium 分頁、無並列渲染）：
  *   1. 本機 localhost 靜態伺服器（scripts/static-server.mjs）serve 原始站；
  *   2. Playwright Chromium 載入 index.html，等待 app.js 資料就緒；
- *   3. 注入 jsPDF 與僅供構建使用的 scripts/pdf-renderer.js；
+ *   3. 注入教育部註解資料、jsPDF 與僅供構建使用的 scripts/pdf-renderer.js；
  *   4. 在分頁內列舉全部「非空」目標（每課一 PDF＋每學期一 PDF），
- *      路徑一律由分頁內 worksheetPath() 產生（與 app 端完全一致）；
+ *      路徑由 worksheetPath() 產生，頁數依放大註解換行後的實際版面計算；
  *   5. 逐目標 buildWorksheetPdf({version,grade,semester,course})，
  *      course=null 為整學期；回傳 {b64,pageCount} 寫入 _site/<path>；
  *   6. 驗證：PDF 檔頭 %PDF-／檔尾 %%EOF、manifest.json（路徑/課數/頁數/位元組）、
@@ -86,7 +86,7 @@ async function copyWebAssets() {
 }
 
 /* ── 分頁端工具 ────────────────────────────────────────── */
-const listTargetsPageFn = () => {
+const listTargetsPageFn = async () => {
   const out = [];
   const V = Object.keys(DATA);
   for (const version of V) {
@@ -99,7 +99,7 @@ const listTargetsPageFn = () => {
         for (const course of Object.keys(sem).sort((a, b) => Number(a) - Number(b))) {
           const chars = sem[course] || [];
           if (!chars.length) continue;
-          const expectedPages = Math.ceil(chars.length / SHEET_PAGE_CHARS);
+          const expectedPages = await worksheetPdfPageCount({ ...sel, course });
           semesterPages += expectedPages;
           out.push({ ...sel, course, expectedPages, wholeSemester: false,
             path: worksheetPath({ ...sel, course }, false) });
@@ -160,6 +160,7 @@ async function main() {
 
   // PDF 工具與渲染器只在構建環境載入，平板不下載或執行它們。
   await page.addScriptTag({ path: join(ROOT, 'jspdf.umd.min.js') });
+  await page.addScriptTag({ path: join(ROOT, 'scripts', 'pdf-annotations.js') });
   // 構建渲染器（非公開資產；index 不引用）。
   await page.addScriptTag({ path: join(ROOT, 'scripts', 'pdf-renderer.js') });
   await page.waitForFunction(() => typeof window.buildWorksheetPdf === 'function');
@@ -192,7 +193,7 @@ async function main() {
       throw new Error(`${t.path}: ${err.message || err}`, { cause: err });
     }
     if (res.pageCount !== t.expectedPages) {
-      throw new Error(`${t.path}: 頁數 ${res.pageCount} 與課程資料 ${t.expectedPages} 不符`);
+      throw new Error(`${t.path}: 頁數 ${res.pageCount} 與註解版面 ${t.expectedPages} 不符`);
     }
     const buf = Buffer.from(res.b64, 'base64');
     if (buf.length < 64 || !buf.subarray(0, 5).toString('latin1').startsWith('%PDF-')) {
@@ -238,7 +239,7 @@ async function main() {
   const minSize = entries.length ? Math.min(...entries.map((e) => e.bytes)) : 0;
   console.log('────────────────────────────');
   console.log(`完成 ${entries.length}/${targets.length} 份 PDF`);
-  console.log(`總頁數 ${totalPages}（合約：課程 1074 頁 / 含學期 2148 頁）`);
+  console.log(`總頁數 ${totalPages}（依教育部註解實際換行與分頁）`);
   console.log(`PDF 總大小 ${(totalBytes / 1048576).toFixed(2)} MB（最小單檔 ${minSize} B）`);
   console.log(`網站容量上限 ${PAGES_HARD_LIMIT} B，預警 ${(PAGES_SOFT_LIMIT / 1048576).toFixed(0)} MiB`);
 
