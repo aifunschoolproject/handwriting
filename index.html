@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。 -->
-<meta name="app-version" content="2026.10.27.1">
+<meta name="app-version" content="2026.10.28.1">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=42">
+<link rel="stylesheet" href="style.css?v=43">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
@@ -40,6 +40,13 @@
   </div>
   <div class="progress-pill" id="progressPill" role="status" aria-live="polite" title="本課已練習字數">0/0</div>
   <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
+  <!-- 習字本下載：依目前選課（版本/年級/學期/課次），路徑＝靜態 PDF -->
+  <div class="worksheet-dl" role="group" aria-label="習字本下載">
+    <span class="worksheet-dl-label">習字本</span>
+    <button class="btn btn-ghost-btn worksheet-dl-btn" id="btnDlCourse" type="button" aria-label="下載本課習字本 PDF">本課</button>
+    <button class="btn btn-ghost-btn worksheet-dl-btn" id="btnDlSemester" type="button" aria-label="下載整學期習字本 PDF">整學期</button>
+  </div>
+  <p class="worksheet-dl-status" id="dlStatus" role="status" aria-live="polite"></p>
   <details class="app-update" id="appUpdate">
     <summary>更新與版本</summary>
     <p id="updateStatus" role="status" aria-live="polite"></p>
@@ -58,6 +65,13 @@
     <div class="setup-steps" id="setupSteps"></div>
     <div class="setup-foot">
       <span class="setup-summary" id="setupSummary"></span>
+      <!-- 習字本下載（選課畫面內的入口；頂欄被本浮層蓋住時的同功能控制項） -->
+      <div class="worksheet-dl worksheet-dl-setup" role="group" aria-label="習字本下載">
+        <span class="worksheet-dl-label">習字本</span>
+        <button class="btn btn-ghost-btn worksheet-dl-btn" id="btnDlCourseSetup" type="button" aria-label="下載本課習字本 PDF">本課</button>
+        <button class="btn btn-ghost-btn worksheet-dl-btn" id="btnDlSemesterSetup" type="button" aria-label="下載整學期習字本 PDF">整學期</button>
+      </div>
+      <p class="worksheet-dl-status" id="dlStatusSetup" role="status" aria-live="polite"></p>
       <button class="btn btn-accent" id="btnStart">▶ 開始練習</button>
     </div>
   </div>
@@ -135,7 +149,7 @@
 <script src="data.js?v=1"></script>
 <script src="dict.js?v=5"></script>
 <script src="bpmf.js?v=8"></script>
-<script src="app.js?v=44"></script>
+<script src="app.js?v=45"></script>
 <script src="update.js?v=4"></script>
 </body>
 </html>

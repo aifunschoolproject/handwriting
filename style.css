@@ -205,6 +205,52 @@ button, select { touch-action: manipulation; }
 
 /* 頂欄選課按鈕 */
 .btn-choose { font-size: 0.85rem; padding: 0.4rem 0.85rem; min-height: var(--touch); }
+
+/* 頂欄習字本下載（依目前選課）：一組兩個小鈕＋結果列 */
+.worksheet-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--teal-soft);
+  border: 1px solid #cfe3dc;
+  border-radius: 999px;
+  padding: 0.14rem 0.2rem 0.14rem 0.6rem;
+  flex-shrink: 0;
+}
+.worksheet-dl-label { font-size: 0.67rem; color: var(--teal); font-weight: 700; }
+.worksheet-dl-btn {
+  border: none;
+  background: transparent;
+  color: var(--teal);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 2.2rem;
+  padding: 0.42rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.worksheet-dl-btn:active { transform: scale(.97); }
+.worksheet-dl-btn:focus-visible { outline: 3px solid var(--teal); outline-offset: 1px; }
+.worksheet-dl-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+.worksheet-dl-status {
+  width: 100%;
+  min-height: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.worksheet-dl-status:empty { display: none; }
+.worksheet-dl-status.pending { color: var(--muted); }
+.worksheet-dl-status.ok { color: var(--green); font-weight: 700; }
+.worksheet-dl-status.err { color: var(--accent); font-weight: 700; }
+.worksheet-dl-status.unknown { color: var(--accent); }
+/* 選課畫面（#setup）內的習字本下載：一組一列＋結果列 */
+.worksheet-dl-setup { width: 100%; justify-content: flex-start; background: none; border: none; padding: 0; }
+.worksheet-dl-setup .worksheet-dl-btn { min-height: 2.6rem; font-size: 0.95rem; font-weight: 700; }
+.worksheet-dl-setup + .worksheet-dl-status { width: auto; }
 .app-update { width: 100%; font-size: 0.75rem; color: var(--muted); }
 .app-update summary { cursor: pointer; padding: 0.5rem 0; }
 .app-update p { margin: 0.4rem 0; overflow-wrap: anywhere; }
