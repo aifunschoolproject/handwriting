@@ -5,8 +5,7 @@
  *   唸字功能已移除（內嵌瀏覽器無 TTS）；注音改為版面顯示
  *   HanziWriter（筆順動畫＋逐筆練習）
  *   習字本 PDF：靜態預產（scripts/build-pdfs.mjs + scripts/pdf-renderer.js）
- *   存放於 downloads/worksheets/；網頁「⬇ 習字本」可依選課下載
- *   （App 內 Vuplex 存公開下載資料夾、一般瀏覽器直接下載）。
+ *   存放於 downloads/worksheets/；網頁不提供習字本預覽、下載或 App 儲存。
  * DATA[版本][年級 1..6][學期 1|2][課次 '0'=特殊單元,'1'..'12'] = [{name,zhuYin,fullStroke,radical,type}]
  * ──────────────────────────────────────────────────────── */
 'use strict';
@@ -19,9 +18,7 @@ const DICT = window.HANDWRITING_DICT || {};
 /* ── 習字本 PDF（靜態預產）────────────────────────────
  * 版面固定全開（筆順／注音／釋義例詞／描紅格皆含），
  * 檔案由 build 端（scripts/pdf-renderer.js）預產到
- * downloads/worksheets/；僅保留建置所需資料與函式，不提供網頁預覽。
- * 網頁下載路徑與本函式同一來源（見下方「習字本下載」），版本參數
- * ?v= 取 index.html 的 app-version（與 PDF下載連結.csv 同慣例）。 */
+ * downloads/worksheets/；僅保留建置所需資料與函式，不提供網頁預覽。 */
 // PDF 建置使用的固定版面選項。
 const SHEET_OPTIONS = Object.freeze({ stroke: true, pinyin: true, dict: true, trace: true });
 const SHEET_SLUG = { '南一': 'nanyi', '康軒': 'kangxuan', '翰林': 'hanlin' };
@@ -243,7 +240,6 @@ function onFilterChange() {
   if (courseKey() !== prevKey && !detail.hidden) closeDetail(); // 已開字卡屬於舊課
   renderGrid();
   setupSave();
-  if (courseKey() !== prevKey) setDlStatus(''); // 選課已變，舊結果不再代表本課
 }
 
 /* ── HanziWriter（筆順動畫＋逐筆練習）──
@@ -635,157 +631,6 @@ function sheetCourses(selection, wholeSemester) {
   }));
 }
 
-
-
-/* ── 習字本下載（靜態 PDF）──────────────────────────
- * 路徑＝worksheetPath() 單一來源；?v= 版本參數取 index.html 的
- * app-version（與 PDF下載連結.csv 同慣例，供快取失效與 App 端校驗）。
- * App 內（Vuplex）：送 JSON 字串 {type:'worksheet',action:'download',
- *   requestId,url,fileName}，App 存進公開「下載」資料夾後經
- *   window.hwWorksheetAck({requestId,ok,error}) 回傳；UI 依 requestId
- * 對應本筆請求。規則（不假稱成功、不靜默無動作）：
- *   - ok 必須 === true（嚴格的 boolean 比較，字串 "false" 不算成功）。
- *   - 15 秒內沒 ack ≠ 失敗：App 可能仍在存檔，結果未知。顯示「狀態
- *     未知」，按鈕保持鎖定（避免重送造成重複下載）；晚到的 ack 仍會
- *     更新狀態，或重新載入頁面恢復（選課與練習紀錄保留）。
- *   - 沒有任何「逾時＝失敗」的斷言：沒有 ACK 就無法知道結果。
- * App 判定（window.vuplex 可能晚於頁面載入注入）：
- *   點按時先看 UA 是否像內嵌 WebView（UA 含 "vuplex" 標記即算——
- *   App 端可用 SetUserAgent 追加；否則依 Android "wv)"／iOS WKWebView
- *   簽名）；像則短輪詢等 vuplex 最長 2 秒，出現即走 App 路徑，未出現
- *   則報「App 未就緒」——絕不回落瀏覽器跳轉（避免把 App 內頁面偷偷導走）。
- * 一般瀏覽器：a[download] 真 PDF 下載，target=_blank＋rel=noopener
- *   開新分頁，本頁不導走；不送訊息、不假設有 App；狀態只說「已開始下載」。
- * 狀態列一律純文字（不加注音、不寫 HTML——介面標籤無注音慣例，
- * 且窄頂欄內注音疊字會與下方元素重疊）；同步顯示於頂欄與選課畫面。 */
-const WORKSHEET_ACK_WAIT_MS = 15000;   // 逾時＝狀態未知（非失敗），晚到 ack 仍有效
-const VUPLEX_INJECT_WAIT_MS = 2000;    // vuplex 注入延遲的短輪詢上限
-const WORKSHEET_SITE = 'https://aifunschoolproject.github.io/handwriting/';
-let worksheetDl = null; // {id,label,settled,timer}
-const dlStatusEls = [$('dlStatus'), $('dlStatusSetup')];
-const dlBtns = [$('btnDlCourse'), $('btnDlSemester'), $('btnDlCourseSetup'), $('btnDlSemesterSetup')];
-
-function worksheetVersionTag() {
-  return document.querySelector('meta[name="app-version"]')?.content || '';
-}
-function worksheetDownloadUrl(selection, wholeSemester) {
-  const u = new URL(worksheetPath(selection, wholeSemester), WORKSHEET_SITE);
-  const v = worksheetVersionTag();
-  if (v) u.searchParams.set('v', v);
-  return u.toString();
-}
-function worksheetDownloadName(selection, wholeSemester) {
-  const v = SHEET_SLUG[selection?.version];
-  if (!v) throw new Error(`worksheetDownloadName: 未知版本 ${selection?.version}`);
-  const file = wholeSemester ? 'semester' : `course-${String(selection?.course ?? '')}`;
-  return `${v}-g${selection.grade}-s${selection.semester}-${file}.pdf`;
-}
-function worksheetLabel(selection, wholeSemester) {
-  const v = VERSION_LABELS[selection.version] || selection.version || '';
-  const g = ['', '一', '二', '三', '四', '五', '六'][selection.grade] || selection.grade || '';
-  const s = selection.semester === '1' ? '上' : '下';
-  const c = wholeSemester ? '整學期'
-    : (selection.course === '0' ? '特殊單元' : `第 ${selection.course} 課`);
-  return `${v}版・${g}年級・${s}學期・${c}`;
-}
-function setDlStatus(kind, text) {
-  // kind: ''（空）/ pending / unknown / ok / err；純文字、無注音（aria-live 由元素承擔）
-  const cls = 'worksheet-dl-status' + (kind ? ` ${kind}` : '');
-  for (const el of dlStatusEls) {
-    el.className = cls;
-    el.textContent = text || '';
-  }
-}
-function setDlButtons(enabled) {
-  for (const b of dlBtns) b.disabled = !enabled;
-}
-// 像內嵌 WebView 嗎？Vuplex 可另以 SetUserAgent 追加自訂標記（UA 含 "vuplex" 即算）；
-// 否則依平台簽名：Android 系統 WebView（UA 含 "wv)"）／iOS WKWebView
-//（有 AppleWebKit 版號＋Mobile、無 Safari 的 Version/ 段）。
-function looksEmbeddedWebView() {
-  const ua = (navigator.userAgent || '').toLowerCase();
-  if (/vuplex|wv\)/.test(ua)) return true;
-  if (ua.includes('applewebkit/') && ua.includes('mobile') && !ua.includes('version/')) return true;
-  return false;
-}
-function waitForVuplex(ms) {
-  if (window.vuplex) return Promise.resolve(true);
-  return new Promise((res) => {
-    const t0 = Date.now();
-    const timer = setInterval(() => {
-      if (window.vuplex) { clearInterval(timer); res(true); }
-      else if (Date.now() - t0 >= ms) { clearInterval(timer); res(false); }
-    }, 100);
-  });
-}
-// App 回傳結果（Vuplex 以 ExecuteJavaScript 呼叫；只認目前這筆請求的 requestId，
-// 且可晚於 15 秒逾時到達——逾時只改顯示「狀態未知」，不等於失敗）。
-window.hwWorksheetAck = (raw) => {
-  let ack = null;
-  try { ack = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return; }
-  if (!ack || !worksheetDl || ack.requestId !== worksheetDl.id) return;
-  const req = worksheetDl;
-  req.settled = true;
-  worksheetDl = null; // 已確認結果 → 解除單一請求，允許下次下載
-  clearTimeout(req.timer);
-  setDlButtons(true);
-  if (ack.ok === true) setDlStatus('ok', `${req.label} 習字本已存進裝置下載資料夾`);
-  else setDlStatus('err', `${req.label} 下載失敗：${ack.error || 'App 未給出原因'}`);
-};
-async function downloadWorksheet(wholeSemester) {
-  if (worksheetDl) return; // 前一筆尚未確認結果（pending／狀態未知）；重新載入可恢復
-  const selection = { version: state.version, grade: state.grade, semester: state.semester, course: state.course };
-  let url, name;
-  try {
-    url = worksheetDownloadUrl(selection, wholeSemester);
-    name = worksheetDownloadName(selection, wholeSemester);
-  } catch (err) {
-    setDlStatus('err', `下載失敗：${err.message}`);
-    return;
-  }
-  const label = worksheetLabel(selection, wholeSemester);
-  // vuplex 可能晚於頁面注入：僅在 UA 像 WebView 時才等（一般瀏覽器不等、不延遲）
-  if (!window.vuplex && looksEmbeddedWebView()) await waitForVuplex(VUPLEX_INJECT_WAIT_MS);
-  const vuplex = window.vuplex;
-  if (vuplex && typeof vuplex.postMessage === 'function') {
-    // App 內：請 App 端存公開「下載」資料夾；結果經 hwWorksheetAck 回傳
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    worksheetDl = { id, label, settled: false, timer: null };
-    setDlButtons(false);
-    setDlStatus('pending', `${label} 習字本儲存中…（App 存檔，請稍候）`);
-    worksheetDl.timer = setTimeout(() => {
-      if (worksheetDl?.id !== id || worksheetDl.settled) return;
-      // 逾時 ≠ 失敗：App 可能仍在存檔。保持鎖定等晚到 ack；重新載入可恢復。
-      setDlStatus('unknown', `${label} 狀態未知：App 可能仍在存檔，若有結果會自動更新，或重新載入頁面`);
-    }, WORKSHEET_ACK_WAIT_MS);
-    try {
-      vuplex.postMessage(JSON.stringify({ type: 'worksheet', action: 'download', requestId: id, url, fileName: name }));
-    } catch {
-      // 送出失敗＝確定沒送出 → 可再試（不等於「狀態未知」）
-      const req = worksheetDl;
-      req.settled = true;
-      clearTimeout(req.timer);
-      worksheetDl = null;
-      setDlButtons(true);
-      setDlStatus('err', `${label} 下載失敗：無法送出下載請求`);
-    }
-  } else if (looksEmbeddedWebView()) {
-    // 像 App 內但 vuplex 未就緒：報錯，不回落瀏覽器跳轉（避免靜默導走 App 頁面）
-    setDlStatus('err', `${label} 無法由 App 存檔：App 未就緒，請重新開啟 App 再試`);
-  } else {
-    // 一般瀏覽器：真實 PDF 下載；新分頁開啟，本頁留在原處
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setDlStatus('ok', `${label} 已開始下載（新分頁開啟 PDF），請在瀏覽器下載或另存`);
-  }
-}
-
 /* ── 事件綁定 ── */
 function bind() {
   selVersion.addEventListener('change', onFilterChange);
@@ -848,11 +693,6 @@ function bind() {
     if (!b) return;
     setFs(Number(b.dataset.fs));
   });
-
-  // 習字本下載（依目前選課；頂欄與選課畫面兩組控制項，App 內走 Vuplex 存公開下載資料夾）
-  for (const b of dlBtns) {
-    b.addEventListener('click', () => downloadWorksheet(b.id.includes('Semester')));
-  }
 }
 
 /* ── 介面用字加注音（bpmf.js）：只在「學習內容」區域加注音（課次說明、國語辭典）。
@@ -926,7 +766,6 @@ function renderSetupSteps() {
   summary.innerHTML = bpmf(`${v}・${g}年級・${sel.semester === '1' ? '上' : '下'}學期・${courseTxt}`);
 }
 function applySel(version, grade, semester, course, startPractice) {
-  const prevKey = courseKey();
   if (version) state.version = version;
   if (grade) state.grade = grade;
   if (semester) state.semester = semester;
@@ -944,7 +783,6 @@ function applySel(version, grade, semester, course, startPractice) {
   renderGrid();
   if (!$('setup').hidden) renderSetupSteps();
   setupSave();
-  if (courseKey() !== prevKey) setDlStatus(''); // 選課已變，舊結果不再代表本課
   if (startPractice) {
     $('setup').hidden = true;
     document.querySelector('main').scrollTop = 0;
