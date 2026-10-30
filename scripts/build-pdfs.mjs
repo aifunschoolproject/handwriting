@@ -9,9 +9,9 @@
  *   5. 逐目標 buildWorksheetPdf({version,grade,semester,course})，
  *      course=null 為整學期；回傳 {b64,pageCount} 寫入 _site/<path>；
  *   6. 驗證：PDF 檔頭 %PDF-／檔尾 %%EOF、manifest.json（路徑/課數/頁數/位元組）、
- *      總大小對照 GitHub Pages 容量。
- *
- * 產物：_site/（網站資源複製＋ downloads/worksheets/*.pdf ＋ manifest.json）。
+ *      總大小對照 GitHub Pages 容量；
+ *   7. 下載面板 worksheet-download.js 為公開資產，下載本構建產出的 PDF
+ *      （中文檔名＋Unity 存檔橋接；見該檔頂部說明）。
  * 無任何 dummy PDF；任一目標失敗 → 非零結束（不留半成品通過）。
  * 結束（含失敗/訊號）一律關閉 browser 與 static server。
  *
@@ -69,7 +69,7 @@ function startServer() {
 /* 公開資產明確列舉：不發布原始教材、構建程式、套件或本機診斷檔。
  * 新增公開入口／資源時同步更新此清單；遺漏或無法讀取時中止發布。 */
 const PUBLIC_ASSETS = [
-  'index.html', 'style.css', 'app.js', 'bpmf.js', 'bpmf_demo.html', 'update.js',
+  'index.html', 'style.css', 'app.js', 'worksheet-download.js', 'bpmf.js', 'bpmf_demo.html', 'update.js',
   'data.js', 'dict.js', 'hanzi-data.js', 'hanzi-writer.min.js',
   'fonts/TW-Kai.woff2', 'fonts/Bpmf.woff2', 'fonts/BpmfGsr.woff2',
 ];

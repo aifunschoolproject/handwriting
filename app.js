@@ -5,7 +5,7 @@
  *   唸字功能已移除（內嵌瀏覽器無 TTS）；注音改為版面顯示
  *   HanziWriter（筆順動畫＋逐筆練習）
  *   習字本 PDF：靜態預產（scripts/build-pdfs.mjs + scripts/pdf-renderer.js）
- *   存放於 downloads/worksheets/；網頁不提供習字本預覽、下載或 App 儲存。
+ *   存放於 downloads/worksheets/；worksheet-download.js 提供瀏覽器下載與 Unity 公開存檔。
  * DATA[版本][年級 1..6][學期 1|2][課次 '0'=特殊單元,'1'..'12'] = [{name,zhuYin,fullStroke,radical,type}]
  * ──────────────────────────────────────────────────────── */
 'use strict';
@@ -18,7 +18,7 @@ const DICT = window.HANDWRITING_DICT || {};
 /* ── 習字本 PDF（靜態預產）────────────────────────────
  * 版面固定全開（筆順／注音／釋義例詞／描紅格皆含），
  * 檔案由 build 端（scripts/pdf-renderer.js）預產到
- * downloads/worksheets/；僅保留建置所需資料與函式，不提供網頁預覽。 */
+ * downloads/worksheets/；網頁下載既有 PDF，不重新產生或改變固定版面。 */
 // PDF 建置使用的固定版面選項。
 const SHEET_OPTIONS = Object.freeze({ stroke: true, pinyin: true, dict: true, trace: true });
 const SHEET_SLUG = { '南一': 'nanyi', '康軒': 'kangxuan', '翰林': 'hanlin' };
@@ -42,7 +42,7 @@ const state = {
   charIdx: null, // 本課字序（課內 ‹ › 翻字）
   ghostOn: true,
   gridOn: true, // 格線預設開（與 btnGrid 初始「開」一致；未初始化會吃掉第一下切換）
-  fs: 22, // 介面字號：22 正常(基準)／26.4 特大(1.2倍)（root font-size 驅動整體放大）
+  fs: 22, // 保留既有儲存值：22 標準／26.4 大字；僅調整學習文字，不放大整頁間距。
   done: {}, // { "南一/1/1/1": Set("一","二") }
 };
 
@@ -652,6 +652,7 @@ function bind() {
   detail.addEventListener('click', (e) => { if (e.target === detail) closeDetail(); });
   bindDictScroll(); // 字典 ▲/▼ 翻頁＋mouse-drag 兜底（見 renderDict 後說明）
   document.addEventListener('keydown', (e) => {
+    if (!$('worksheetPanel').hidden) return; // 下載面板自行處理焦點與 Escape。
     if (e.key === 'Escape') {
       if (dictBox.open) dictBox.open = false;
       else if (!detail.hidden) closeDetail();
@@ -673,7 +674,7 @@ function bind() {
   $('btnPrev').addEventListener('click', () => stepChar(-1));
   $('btnNext').addEventListener('click', () => stepChar(1));
 
-  // 進入引導（大圖卡選課，點課卡即練）
+  // 先選課，再決定開始練習或下載；點選課次不自動離開選課頁。
   $('setupSteps').addEventListener('click', (e) => {
     const card = e.target.closest('.setup-card');
     if (!card) return;
@@ -681,13 +682,24 @@ function bind() {
     if (k === 'v') applySel(v, null, null, null, false);
     else if (k === 'g') applySel(null, v, null, null, false);
     else if (k === 's') applySel(null, null, v, null, false);
-    else applySel(null, null, null, v, true); // 課次：點一下即開始練習
+    else applySel(null, null, null, v, false);
+    // 選課會重建卡片，將鍵盤焦點還給同一張卡。
+    Array.from($('setupSteps').querySelectorAll('.setup-card'))
+      .find((button) => button.dataset.k === k && button.dataset.v === v)?.focus({ preventScroll: true });
   });
   $('btnStart').addEventListener('click', () => applySel(null, null, null, null, true));
   $('btnChoose').addEventListener('click', showSetup);
   $('btnSetup').addEventListener('click', showSetup);
+  for (const button of document.querySelectorAll('[data-open-download]')) {
+    button.addEventListener('click', () => {
+      $('appSettings').open = false;
+      window.WorksheetDownloads.open({
+        version: state.version, grade: state.grade, semester: state.semester, course: state.course,
+      }, button);
+    });
+  }
 
-  // 字號（整介面等比放大，自動記憶）
+  // 學習文字大小獨立於介面與宿主安全區，自動記憶。
   fsCtl.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-fs]');
     if (!b) return;
@@ -699,14 +711,12 @@ function bind() {
    標題／篩選器／按鈕等 UI 標籤不加：注音在狹窄標籤會折行、蓋住文字；
    生字讀音已顯示在字卡與寫字畫面，UI 標籤不必重複。 */
 function annotateUI() {
-  const h1 = document.querySelector('.topbar h1');
-  if (h1) h1.textContent = '✍️ 手寫練習';
   const sum = document.querySelector('.detail-dict > summary');
-  if (sum) sum.innerHTML = bpmf('📖 教育部《國語辭典》');
+  if (sum) sum.textContent = '教育部國語辭典';
 }
 
-/* ── 進入引導：大圖卡選 版本→年級→學期→課次，點課卡即練 ── */
-const sel = { version: null, grade: null, semester: null, course: null }; // topbar selects 為單一來源
+/* ── 進入引導：先選版本→年級→學期→課次，再開始練習或下載 ── */
+const sel = { version: null, grade: null, semester: null, course: null };
 function refreshSel() {
   sel.version = selVersion.value || null;
   sel.grade = selGrade.value || null;
@@ -727,6 +737,11 @@ function setupSave() {
     v, gk: state.grade, g, s: state.semester, c: state.course,
     text: `${v}・${g}年級・${state.semester === '1' ? '上' : '下'}學期・${state.course === '0' ? '特殊單元' : `第 ${state.course} 課`}`,
   }));
+  $('currentSelection').textContent =
+    `${v}版・${g}年級・${state.semester === '1' ? '上' : '下'}學期・${state.course === '0' ? '特殊單元' : `第 ${state.course} 課`}`;
+  document.dispatchEvent(new CustomEvent('worksheet-selection-change', {
+    detail: { version: state.version, grade: state.grade, semester: state.semester, course: state.course },
+  }));
 }
 function semNames(ver, grade) {
   const out = [];
@@ -739,31 +754,26 @@ function renderSetupSteps() {
   const summary = $('setupSummary');
   let h = '';
   const step = (label, cards, current, kind) => {
-    h += `<div class="setup-step"><div class="setup-step-label">${bpmf(label)}</div><div class="setup-cards">`;
+    h += `<section class="setup-step" aria-label="${label}"><h3 class="setup-step-label">${label}</h3><div class="setup-cards${kind === 'c' ? ' setup-cards-course' : ''}">`;
     for (const c of cards) {
-      h += `<button type="button" class="setup-card${c.v === current ? ' on' : ''}" data-k="${kind}" data-v="${c.v}" aria-pressed="${c.v === current}">${c.html}</button>`;
+      h += `<button type="button" class="setup-card${kind === 'c' ? ' setup-card-course' : ''}${c.v === current ? ' on' : ''}" data-k="${kind}" data-v="${c.v}" aria-pressed="${c.v === current}">${c.text}</button>`;
     }
-    h += '</div></div>';
+    h += '</div></section>';
   };
-  step('版本', Object.keys(DATA).map((v) => ({ v, html: bpmf((VERSION_LABELS[v] || v) + ' 版') })), sel.version, 'v');
+  step('版本', Object.keys(DATA).map((v) => ({ v, text: (VERSION_LABELS[v] || v) + '版' })), sel.version, 'v');
   const ver = DATA[sel.version];
   const grades = sel.version && ver ? Object.keys(ver).sort((a, b) => a - b) : ['1'];
-  step('年級', grades.map((g) => ({ v: g, html: bpmf(`${['', '一', '二', '三', '四', '五', '六'][g] || g} 年級`) })), sel.grade, 'g');
+  step('年級', grades.map((g) => ({ v: g, text: `${['', '一', '二', '三', '四', '五', '六'][g] || g}年級` })), sel.grade, 'g');
   const sems = semNames(ver, sel.grade);
-  if (sems.length > 1) step('學期', sems.map((s) => ({ v: s, html: bpmf(`${s === '1' ? '上' : '下'}學期`) })), sel.semester, 's');
+  step('學期', sems.map((s) => ({ v: s, text: `${s === '1' ? '上' : '下'}學期` })), sel.semester, 's');
   const cls = ver?.[sel.grade]?.[sel.semester] || {};
-  if (cls['0']) h += `<div class="setup-step"><div class="setup-step-label">${bpmf('課次')}</div><div class="setup-cards"><button type="button" class="setup-card${sel.course === '0' ? ' on' : ''}" data-k="0" data-v="0" aria-pressed="${sel.course === '0'}">${bpmf('特殊單元')}</button></div></div>`;
-  const nums = Object.keys(cls).filter((k) => k !== '0').map(Number).sort((a, b) => a - b);
-  if (nums.length) {
-    h += `<div class="setup-step"><div class="setup-step-label">${bpmf('課次（點一下即開始練習）')}</div><div class="setup-cards setup-cards-course">`;
-    for (const i of nums) h += `<button type="button" class="setup-card setup-card-course${sel.course === String(i) ? ' on' : ''}" data-k="${i}" data-v="${i}" aria-pressed="${sel.course === String(i)}">${bpmf(`第 ${i} 課`)}</button>`;
-    h += '</div></div>';
-  }
+  const courses = Object.keys(cls).sort((a, b) => Number(a) - Number(b));
+  step('課次', courses.map((c) => ({ v: c, text: c === '0' ? '特殊單元' : `第 ${c} 課` })), sel.course, 'c');
   stepsBox.innerHTML = h;
   const v = VERSION_LABELS[sel.version] || sel.version || '';
   const g = ['', '一', '二', '三', '四', '五', '六'][sel.grade] || sel.grade || '';
   const courseTxt = sel.course === '0' ? '特殊單元' : `第 ${sel.course} 課`;
-  summary.innerHTML = bpmf(`${v}・${g}年級・${sel.semester === '1' ? '上' : '下'}學期・${courseTxt}`);
+  summary.textContent = `${v}版・${g}年級・${sel.semester === '1' ? '上' : '下'}學期・${courseTxt}`;
 }
 function applySel(version, grade, semester, course, startPractice) {
   if (version) state.version = version;
@@ -785,6 +795,8 @@ function applySel(version, grade, semester, course, startPractice) {
   setupSave();
   if (startPractice) {
     $('setup').hidden = true;
+    document.querySelector('main').inert = false;
+    $('appSettings').open = false;
     document.querySelector('main').scrollTop = 0;
     grid.querySelector('.char-card')?.focus({ preventScroll: true });
   }
@@ -793,6 +805,8 @@ function showSetup() {
   if (!detail.hidden) closeDetail(); // 選課前先關字卡，避免選課後還留著舊字
   renderSetupSteps();
   $('setup').hidden = false;
+  document.querySelector('main').inert = true;
+  $('appSettings').open = false;
   $('setup').scrollTop = 0;
   $('setupTitle').focus({ preventScroll: true });
 }
@@ -814,15 +828,16 @@ function initSetup() {
   showSetup();
 }
 
-/* ── 字號（整介面等比放大）：root font-size 由 --fs 驅動，正常22(基準)/特大26.4(1.2倍)，自動記憶 ── */
+/* ── 學習文字大小：沿用 hw_fs 儲存值，字體放大不連動操作區與安全區 ── */
 const FS_LEVELS = [22, 26.4];
 function setFs(px) {
   if (!FS_LEVELS.includes(px)) return;
   state.fs = px;
-  document.documentElement.style.setProperty('--fs', px + 'px');
+  document.documentElement.style.setProperty('--learning-scale', String(px / 22));
   store.set('hw_fs', String(px));
   for (const b of fsCtl.querySelectorAll('button[data-fs]')) {
     b.classList.toggle('on', Number(b.dataset.fs) === px);
+    b.setAttribute('aria-pressed', String(Number(b.dataset.fs) === px));
   }
 }
 function loadFs() {

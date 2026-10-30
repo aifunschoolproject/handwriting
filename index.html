@@ -5,60 +5,61 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。 -->
-<meta name="app-version" content="2026.10.28.2">
+<meta name="app-version" content="2026.10.30.1">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=44">
+<link rel="stylesheet" href="style.css?v=45">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
-  <h1>✍️ 手寫練習</h1>
-  <div class="filters">
-    <label class="filter">
-      <span>版本</span>
-      <select id="selVersion"></select>
-    </label>
-    <label class="filter">
-      <span>年級</span>
-      <select id="selGrade"></select>
-    </label>
-    <label class="filter">
-      <span>學期</span>
-      <select id="selSemester">
-        <option value="1">上學期</option>
-        <option value="2">下學期</option>
-      </select>
-    </label>
-    <label class="filter">
-      <span>課次</span>
-      <select id="selClass"></select>
-    </label>
-  </div>
-  <div class="fs-ctl" id="fsCtl" role="group" aria-label="文字大小">
-    <span class="fs-ctl-label">文字大小</span>
-    <button type="button" data-fs="22">正常</button>
-    <button type="button" data-fs="26.4">特大</button>
-  </div>
+  <h1>手寫練習</h1>
+  <span class="current-selection" id="currentSelection" aria-label="目前課程"></span>
   <div class="progress-pill" id="progressPill" role="status" aria-live="polite" title="本課已練習字數">0/0</div>
-  <button class="btn btn-ghost-btn btn-choose" id="btnChoose">📖 選課</button>
-  <details class="app-update" id="appUpdate">
-    <summary>更新與版本</summary>
-    <p id="updateStatus" role="status" aria-live="polite"></p>
-    <button class="btn btn-ghost-btn" id="btnCheckUpdate" type="button">檢查更新</button>
-    <button class="btn btn-ghost-btn" id="btnForceUpdate" type="button">強制更新</button>
+  <div class="topbar-actions">
+    <button class="btn btn-choose" id="btnChoose">選課</button>
+    <button class="btn btn-download" id="btnDownloadTop" data-open-download>下載習字本</button>
+  </div>
+  <details class="settings" id="appSettings">
+    <summary class="settings-summary">設定</summary>
+    <div class="settings-body">
+      <div class="fs-ctl" id="fsCtl" role="group" aria-label="學習文字大小">
+        <span class="fs-ctl-label">學習文字</span>
+        <button type="button" data-fs="22">標準</button>
+        <button type="button" data-fs="26.4">特大</button>
+      </div>
+      <details class="app-update" id="appUpdate">
+        <summary>更新與版本</summary>
+        <p id="updateStatus" role="status" aria-live="polite"></p>
+        <button class="btn btn-ghost-btn" id="btnCheckUpdate" type="button">檢查更新</button>
+        <button class="btn btn-ghost-btn" id="btnForceUpdate" type="button">強制更新</button>
+      </details>
+    </div>
   </details>
+  <!-- 既有狀態來源（供 app.js 讀寫，介面改用選課卡） -->
+  <div class="selection-source">
+    <select id="selVersion" aria-hidden="true"></select>
+    <select id="selGrade" aria-hidden="true"></select>
+    <select id="selSemester" aria-hidden="true">
+      <option value="1">上學期</option>
+      <option value="2">下學期</option>
+    </select>
+    <select id="selClass" aria-hidden="true"></select>
+  </div>
 </header>
 
-<!-- 進入引導：大圖卡選 版本／年級／學期／課次，點課卡即練 -->
+<!-- 進入引導：大圖卡選 版本／年級／學期／課次；選好後手按「開始練習」 -->
 <div class="setup" id="setup" role="region" aria-labelledby="setupTitle">
   <div class="setup-inner">
     <div class="setup-head">
       <span class="setup-title" id="setupTitle" tabindex="-1">今天想練哪一課？</span>
-      <span class="setup-sub">選好版本和年級，再點一張課次卡，就可以開始。</span>
+      <span class="setup-sub">選好版本、年級、學期與課次，再按「開始練習」。</span>
     </div>
     <div class="setup-steps" id="setupSteps"></div>
     <div class="setup-foot">
       <span class="setup-summary" id="setupSummary"></span>
-      <button class="btn btn-accent" id="btnStart">▶ 開始練習</button>
+      <div class="setup-foot-actions">
+        <button class="btn btn-accent" id="btnStart">開始練習</button>
+        <button class="btn btn-download" data-open-download>下載習字本</button>
+      </div>
     </div>
   </div>
 </div>
@@ -131,11 +132,43 @@
   </div>
 </div>
 
+<!-- 下載習字本面板（inert 與焦點由 worksheet-download.js 處理） -->
+<div class="worksheet-panel" id="worksheetPanel" hidden role="dialog" aria-modal="true" aria-labelledby="worksheetTitle">
+  <div class="worksheet-panel-inner">
+    <div class="worksheet-panel-head">
+      <h2 id="worksheetTitle" tabindex="-1">下載習字本</h2>
+      <button class="btn btn-ghost-btn" id="btnWorksheetClose" type="button">關閉</button>
+    </div>
+    <p class="worksheet-selection" id="worksheetSelection"></p>
+    <fieldset class="worksheet-scope">
+      <legend>範圍</legend>
+      <label class="scope-option">
+        <input type="radio" name="worksheetScope" value="course" checked>
+        <span>目前課次</span>
+      </label>
+      <label class="scope-option">
+        <input type="radio" name="worksheetScope" value="semester">
+        <span>整學期</span>
+      </label>
+    </fieldset>
+    <div class="worksheet-file">
+      <span>檔名</span>
+      <output id="worksheetFileName"></output>
+    </div>
+    <div class="worksheet-panel-foot">
+      <button class="btn btn-accent" id="btnWorksheetDownload" type="button">下載 PDF</button>
+      <p class="worksheet-status" id="worksheetStatus" role="status" aria-live="polite"></p>
+    </div>
+    <p class="worksheet-hint" id="worksheetHint">PDF 含筆順、注音、釋義與描紅格。一般瀏覽器的存檔位置依瀏覽器設定；App 內下載需等待裝置確認。</p>
+  </div>
+</div>
+
 <script src="hanzi-writer.min.js?v=1"></script>
 <script src="data.js?v=1"></script>
 <script src="dict.js?v=5"></script>
 <script src="bpmf.js?v=8"></script>
-<script src="app.js?v=46"></script>
+<script src="worksheet-download.js?v=1"></script>
+<script src="app.js?v=47"></script>
 <script src="update.js?v=4"></script>
 </body>
 </html>
