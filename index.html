@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。
-     2026.10.30.4：下載後顯示家長存檔位置提示，Unity 確認成功後才顯示已儲存。 -->
-<meta name="app-version" content="2026.10.30.4">
+     2026.10.30.5：畫面大小套用全介面；支援 WebView 滑鼠式拖曳與舊版視口高度。 -->
+<meta name="app-version" content="2026.10.30.5">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=48">
+<link rel="stylesheet" href="style.css?v=49">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
@@ -22,8 +22,8 @@
   <details class="settings" id="appSettings">
     <summary class="settings-summary">設定</summary>
     <div class="settings-body">
-      <div class="fs-ctl" id="fsCtl" role="group" aria-label="學習文字大小">
-        <span class="fs-ctl-label">學習文字</span>
+      <div class="fs-ctl" id="fsCtl" role="group" aria-label="畫面大小">
+        <span class="fs-ctl-label">畫面大小</span>
         <button type="button" data-fs="22">標準</button>
         <button type="button" data-fs="26.4">特大</button>
       </div>
@@ -169,7 +169,7 @@
 <script src="dict.js?v=5"></script>
 <script src="bpmf.js?v=8"></script>
 <script src="worksheet-download.js?v=2"></script>
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 <script src="update.js?v=4"></script>
 </body>
 </html>

@@ -42,7 +42,7 @@ const state = {
   charIdx: null, // 本課字序（課內 ‹ › 翻字）
   ghostOn: true,
   gridOn: true, // 格線預設開（與 btnGrid 初始「開」一致；未初始化會吃掉第一下切換）
-  fs: 22, // 保留既有儲存值：22 標準／26.4 大字；僅調整學習文字，不放大整頁間距。
+  fs: 22, // 沿用 hw_fs 儲存值：22 標準／26.4 特大；整個介面倍率為 1／1.2。
   done: {}, // { "南一/1/1/1": Set("一","二") }
 };
 
@@ -478,13 +478,7 @@ function renderDict(c) {
   h += '</div>';
   dictBody.innerHTML = h;
 }
-/* ── 字典翻頁（宿主兜底）──
- * 宿主 Unity Webview 只送 mouse drag（無 native touch 序列）時，
- * overflow-y:auto 容器不會被 mouse drag 捲動；真 touch 裝置原生捲動正常。
- * 這裡提供兩層兜底、皆只作用 .dict-body：
- *  1. ▲/▼ 按鈕：固定步長翻頁，任何輸入模式皆可按；
- *  2. pointer drag：pointerType=mouse 在 .dict-body 上拖曳 → scrollTop，
- *     touch pointer 不攔截（維持原生捲動），畫布 touch-action:none 不經此路徑。 */
+/* ── 字典翻頁：保留按鈕操作；拖曳由共用 bindPanelScroll 處理。 ── */
 function dictPage(delta) {
   const max = dictBody.scrollHeight - dictBody.clientHeight;
   if (max <= 0) return;
@@ -509,23 +503,72 @@ function bindDictScroll() {
   new ResizeObserver(updateButtons).observe(dictBody);
   updateButtons();
 
-  let pointer = null, startY = 0, startScroll = 0;
-  dictBody.addEventListener('pointerdown', (e) => {
+}
+
+/* Unity 部分 WebView 把觸控轉成 mouse pointer，瀏覽器不會替它原生捲動。
+ * 只補 mouse 的垂直拖曳；真 touch 維持原生手勢，書寫畫布與輸入欄位不攔截。
+ * 超過門檻才捕捉 pointer，拖曳後吃掉合成 click，避免滑過課卡／按鈕卻誤觸。
+ */
+function bindPanelScroll() {
+  const regions = '.topbar, main, #setup, .detail-inner, #dictBody, .worksheet-panel-inner';
+  let drag = null;
+  let suppressClick = false;
+
+  const stopDrag = () => {
+    if (!drag) return;
+    const { panel, id } = drag;
+    drag = null;
+    if (panel.hasPointerCapture(id)) panel.releasePointerCapture(id);
+  };
+  document.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    pointer = e.pointerId;
-    startY = e.clientY;
-    startScroll = dictBody.scrollTop;
-    dictBody.setPointerCapture(pointer);
+    stopDrag();
+    suppressClick = false;
+    const target = e.target;
+    if (!(target instanceof Element) ||
+        target.closest('.writer-wrap, input, textarea, select, a, [contenteditable="true"]')) return;
+    const panel = target.closest(regions);
+    if (!panel || panel.scrollHeight <= panel.clientHeight + 1) return;
+    const rect = panel.getBoundingClientRect();
+    if (e.clientX >= rect.left + panel.clientWidth) return; // 原生捲軸自行處理。
+    drag = {
+      panel, id: e.pointerId, x: e.clientX, y: e.clientY,
+      top: panel.scrollTop, moved: false,
+    };
   });
-  dictBody.addEventListener('pointermove', (e) => {
-    if (pointer !== e.pointerId || Math.abs(e.clientY - startY) < 4) return;
-    dictBody.scrollTop = startScroll - (e.clientY - startY);
+  document.addEventListener('pointermove', (e) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved) {
+      if (Math.abs(dy) < 8 || Math.abs(dy) <= Math.abs(e.clientX - drag.x)) return;
+      drag.moved = true;
+      suppressClick = true;
+      drag.panel.setPointerCapture(drag.id);
+    }
+    e.preventDefault();
+    drag.panel.scrollTop = drag.top - dy;
+  }, { passive: false });
+  document.addEventListener('pointerup', (e) => {
+    if (drag?.id === e.pointerId) stopDrag();
   });
-  const stopDrag = () => { pointer = null; };
-  dictBody.addEventListener('pointerup', stopDrag);
-  dictBody.addEventListener('pointercancel', stopDrag);
-  dictBody.addEventListener('lostpointercapture', stopDrag);
-  window.addEventListener('blur', stopDrag);
+  document.addEventListener('pointercancel', (e) => {
+    if (drag?.id !== e.pointerId) return;
+    stopDrag();
+    suppressClick = false;
+  });
+  document.addEventListener('lostpointercapture', (e) => {
+    if (drag?.id === e.pointerId) drag = null;
+  });
+  window.addEventListener('blur', () => {
+    stopDrag();
+    suppressClick = false;
+  });
+  document.addEventListener('click', (e) => {
+    if (!suppressClick || e.detail === 0) return; // 鍵盤操作不受影響。
+    suppressClick = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
 }
 
 /* ── 詳細視窗 ──
@@ -650,7 +693,8 @@ function bind() {
   // 詳細視窗開關
   $('btnClose').addEventListener('click', closeDetail);
   detail.addEventListener('click', (e) => { if (e.target === detail) closeDetail(); });
-  bindDictScroll(); // 字典 ▲/▼ 翻頁＋mouse-drag 兜底（見 renderDict 後說明）
+  bindDictScroll();
+  bindPanelScroll();
   document.addEventListener('keydown', (e) => {
     if (!$('worksheetPanel').hidden) return; // 下載面板自行處理焦點與 Escape。
     if (e.key === 'Escape') {
@@ -699,7 +743,7 @@ function bind() {
     });
   }
 
-  // 學習文字大小獨立於介面與宿主安全區，自動記憶。
+  // 整個介面大小自動記憶；宿主安全區不跟著縮放。
   fsCtl.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-fs]');
     if (!b) return;
@@ -828,12 +872,12 @@ function initSetup() {
   showSetup();
 }
 
-/* ── 學習文字大小：沿用 hw_fs 儲存值，字體放大不連動操作區與安全區 ── */
+/* ── 畫面大小：沿用 hw_fs 值，標準 33px／特大 39.6px（瀏覽器預設 16px 時）。 ── */
 const FS_LEVELS = [22, 26.4];
 function setFs(px) {
   if (!FS_LEVELS.includes(px)) return;
   state.fs = px;
-  document.documentElement.style.setProperty('--learning-scale', String(px / 22));
+  document.documentElement.style.setProperty('--ui-scale', String(px / 22));
   store.set('hw_fs', String(px));
   for (const b of fsCtl.querySelectorAll('button[data-fs]')) {
     b.classList.toggle('on', Number(b.dataset.fs) === px);
