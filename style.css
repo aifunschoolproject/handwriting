@@ -1,9 +1,10 @@
-/* ── 手寫練習（2026-10-30 平板優先重設計）──────────────────────────
- * 字型：根 font-size 維持瀏覽器預設（100%，約 16px）；介面 UI 一律
- *       無襯線、rem 計，不隨學習字級放大。學習內容（生字卡、寫字頁
- *       大字、練習說明、國語辭典釋義）用正楷 TW-Kai＋Bpmf 注音，
- *       只受 --learning-scale 影響（標準 1／特大 1.2，app.js 寫入，
- *       不連動 UI 與宿主安全區）。
+/* ── 手寫練習（2026-10-30 平板優先重設計；同日放大 UI 字級）──────
+ * 字型：2026.10.30.3 起根字級 206.25%（預設 16px 時為 33px），
+ *       相對上一版 22px 再放大 1.5 倍，保留使用者字級偏好。
+ *       主 UI 約 31–38px、輔助文字約 27px，操作目標約 86px。
+ * 學習內容（生字卡、寫字頁大字、練習說明、國語辭典釋義）用正楷
+ *       TW-Kai＋Bpmf 注音，另外受 --learning-scale 影響（app.js 寫入：
+ *       標準 1／特大 1.2）；介面字級與宿主安全區不隨學習字級連動。
  * 配色：暖白紙張＋深綠/青綠主色＋少量橘色提示。
  *
  * 宿主（Unity）左下角原生按鈕安全區（85186.jpg 約 24vw×15vh）：
@@ -45,8 +46,8 @@
 
   --radius: 0.78rem;
   --shadow: 0 0.11rem 0.55rem rgba(60, 80, 50, .10);
-  --shadow-deep: 0 0.55rem 2.2rem rgba(20, 40, 25, .22);
-  --touch: 3rem;               /* 48px，主要按鈕最小高 */
+  --touch: max(84px, 2.6rem); /* 預設約 86px，隨使用者字級放大 */
+  --touch-2: var(--touch);
 
   /* 宿主 App（Unity）左下角按鈕安全參數（可調；85186.jpg 約 24vw×15vh） */
   --host-safe-width: max(240px, 24vw);
@@ -55,11 +56,9 @@
   --content-bottom: max(24px, var(--host-safe-height));
   /* 寬版左欄寬（由 ≥1000px media 覆寫） */
   --side-w: 0px;
-  /* 學習內容放大倍率（app.js：標準 1／特大 1.2；只作用學習內容） */
+  /* 學習內容倍率（app.js：標準 1／特大 1.2；只作用學習內容） */
   --learning-scale: 1;
 }
-
-/* 根字級維持瀏覽器預設（100%）；UI 用 rem，學習內容用 calc(rem × --learning-scale) */
 
 /* ── 字型（自載子集，確保各裝置一致）──
    漢字：全字庫正楷體 TW-Kai（CNS11643，OFL-1.1）子集——正楷字形、各裝置一致；
@@ -77,6 +76,9 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* UI 用 rem；學習內容另外乘上 --learning-scale。 */
+html { font-size: 206.25%; }
 
 html, body { height: 100%; }
 
@@ -133,20 +135,20 @@ button, input { font-family: inherit; }
   border-bottom: 1px solid var(--line);
   box-shadow: var(--shadow);
   flex-shrink: 0;
-  max-height: min(13rem, 45dvh);
+  max-height: min(15rem, 48dvh);
   overflow-y: auto;
 }
 .topbar h1 {
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--green);
-  white-space: nowrap;
+  white-space: normal;
 }
 .current-selection {
   flex: 1 1 8rem;
   min-width: 0;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -156,8 +158,8 @@ button, input { font-family: inherit; }
   background: var(--teal-soft);
   color: var(--teal);
   font-weight: 700;
-  font-size: 0.78rem;
-  padding: 0.35rem 0.7rem;
+  font-size: 0.88rem;
+  padding: 0.3rem 0.7rem;
   border-radius: 999px;
   white-space: nowrap;
   flex-shrink: 0;
@@ -165,11 +167,13 @@ button, input { font-family: inherit; }
 .topbar-actions {
   display: flex;
   gap: 0.45rem;
+  flex-wrap: wrap;
+  max-width: 100%;
   margin-left: auto;
   flex-shrink: 0;
 }
 .btn-choose {
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--green);
   min-height: var(--touch);
@@ -186,9 +190,9 @@ button, input { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  min-height: 2.6rem;
+  min-height: var(--touch-2);
   padding: 0.3rem 0.15rem;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--muted);
 }
@@ -205,7 +209,7 @@ button, input { font-family: inherit; }
 /* 既有狀態來源（供 app.js 讀寫；選課卡是實際介面） */
 .selection-source { display: none; }
 
-/* 文字大小切換（學習文字 標準 22 倍率 1／特大 1.2；自動記憶） */
+/* 文字大小切換（學習文字 標準 1／特大 1.2；自動記憶） */
 .fs-ctl {
   display: inline-flex;
   align-items: center;
@@ -213,30 +217,28 @@ button, input { font-family: inherit; }
   background: var(--green-soft);
   border: 1px solid #cfe0d2;
   border-radius: 999px;
-  padding: 0.14rem 0.2rem 0.14rem 0.6rem;
+  padding: 0.2rem 0.25rem 0.2rem 0.6rem;
   flex-shrink: 0;
 }
-.fs-ctl-label { font-size: 0.7rem; color: var(--green); font-weight: 700; }
+.fs-ctl-label { font-size: 0.82rem; color: var(--green); font-weight: 700; }
 .fs-ctl button {
   border: none;
   background: transparent;
   color: var(--green);
-  font-size: 0.75rem;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1;
-  min-height: 2.4rem;
-  padding: 0.4rem 0.6rem;
+  min-height: var(--touch-2);
+  padding: 0.4rem 0.7rem;
   border-radius: 999px;
   cursor: pointer;
 }
 .fs-ctl button.on { background: var(--green); color: #fff; font-weight: 700; }
 
-.app-update { font-size: 0.78rem; color: var(--muted); }
-.app-update summary { cursor: pointer; padding: 0.4rem 0.15rem; min-height: 2.4rem; }
+.app-update { font-size: 0.88rem; color: var(--muted); }
+.app-update summary { cursor: pointer; padding: 0.4rem 0.15rem; min-height: var(--touch-2); font-size: 0.88rem; }
 .app-update p { margin: 0.3rem 0 0.3rem 0.2rem; overflow-wrap: anywhere; }
-.app-update .btn { font-size: 0.78rem; margin: 0.2rem 0; }
-
-/* ── 介面用字加注音：上式（注音疊在字上方；介面小字用）── */
+.app-update .btn { font-size: 0.88rem; margin: 0.2rem 0; }
 .bpmf { display: inline-block; line-height: 1; }
 .bpmf .bpmf-z {
   display: block;
@@ -305,35 +307,28 @@ main {
   margin-bottom: 0.6rem;
   flex-wrap: wrap;
 }
-.grid-head .grid-intro { flex: 1 1 auto; min-width: 0; }
-.grid-head h2 { font-size: 1.12rem; font-weight: 800; color: var(--green); }
-/* 課次說明：學習內容，受 --learning-scale */
+.grid-head h2 { font-size: 1.15rem; font-weight: 800; color: var(--green); }
+/* 課次說明：學習內容，受學習字級 */
 .class-note {
   color: var(--muted);
-  font-size: calc(0.82rem * var(--learning-scale));
+  font-size: calc(0.95rem * var(--learning-scale));
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   margin: 0.15rem 0 0;
 }
 .grid-head .btn-ghost-btn {
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   padding: 0.4rem 0.85rem;
   min-height: var(--touch);
   flex-shrink: 0;
 }
 
-/* 字卡網格：窄手機 2 欄、中手機 3 欄、平板 4 欄起、寬版 auto-fill */
+/* 字卡依放大後字級決定欄數；空間不足時減欄，不壓縮生字或水平溢出。 */
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(7.6rem * var(--learning-scale))), 1fr));
   gap: 0.6rem;
   container: grid / inline-size;
   margin-bottom: 1rem;
-}
-@media (min-width: 560px) {
-  .grid { grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
-}
-@media (min-width: 720px) {
-  .grid { grid-template-columns: repeat(4, 1fr); gap: 0.7rem; }
 }
 
 /* 字卡：田字格＋本字＋右側直排注音；角上留 認/✔/部首/筆數 徽章 */
@@ -366,7 +361,7 @@ main {
   gap: 0.08em;
   max-width: 100%;
   padding: 0 0.35rem;
-  font-size: calc(min(2.75rem, 15vw) * var(--learning-scale));
+  font-size: calc(3.8rem * var(--learning-scale));
 }
 .char-card .char {
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
@@ -387,9 +382,9 @@ main {
 }
 .char-card .rad-badge {
   position: absolute;
-  bottom: 0.28rem;
-  left: 0.33rem;
-  font-size: 0.72rem;
+  bottom: 0.3rem;
+  left: 0.35rem;
+  font-size: 1.3rem;
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   color: var(--green);
   background: var(--green-soft);
@@ -397,28 +392,28 @@ main {
   border-radius: 0.4rem;
   padding: 0 0.35rem;
   line-height: 1.5;
-  max-width: 2.6rem;
+  max-width: 4.2rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .char-card .strokes {
   position: absolute;
-  bottom: 0.33rem;
-  right: 0.45rem;
-  font-size: 0.61rem;
+  bottom: 0.35rem;
+  right: 0.5rem;
+  font-size: 0.82rem;
   color: var(--muted);
 }
 .char-card .done-mark {
   position: absolute;
-  top: 0.22rem;
-  right: 0.33rem;
-  width: 1.22rem;
-  height: 1.22rem;
+  top: 0.3rem;
+  right: 0.4rem;
+  width: 1.6rem;
+  height: 1.6rem;
   border-radius: 50%;
   background: var(--green);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -429,15 +424,15 @@ main {
 .detail-meta .type-tag {
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 0.61rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.05rem 0.35rem;
+  padding: 0.08rem 0.4rem;
   border-radius: 0.35rem;
 }
 .char-card .type-tag {
   position: absolute;
-  top: 0.33rem;
-  right: 1.8rem;
+  top: 0.38rem;
+  right: 1.9rem;
 }
 
 /* ── Detail 寫字視窗 ─────────────────────────────────
@@ -476,13 +471,13 @@ main {
   gap: 0.7rem;
   flex-wrap: wrap;
 }
-/* 大字＋右側注音：學習內容，受 --learning-scale */
+/* 大字＋右側注音：學習內容，受學習字級 */
 .detail-word {
   display: flex;
   flex-direction: row;
   align-items: center;
   min-width: 0;
-  font-size: calc(3.1rem * var(--learning-scale));
+  font-size: calc(3.4rem * var(--learning-scale));
   line-height: 1.1;
 }
 .detail-char {
@@ -500,29 +495,30 @@ main {
   font-size: inherit;
 }
 .detail-meta {
-  flex: 1;
+  flex: 1 1 9rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  font-size: 0.78rem;
+  gap: 0.35rem;
+  font-size: 0.9rem;
   color: var(--muted);
   min-width: 0;
 }
-.detail-meta b { color: var(--ink); font-size: 0.83rem; }
+.detail-meta b { color: var(--ink); font-size: 0.95rem; }
 .detail-meta .meta-tag { color: var(--accent); }
 .detail-back {
   margin-left: auto;
   min-width: 5.4rem;
-  font-size: 0.9rem;
+  font-size: 1.05rem;
   flex-basis: 100%;
   order: -1;
   font-weight: 600;
+  min-height: var(--touch);
 }
 
-/* 練習說明句：學習內容，受 --learning-scale */
+/* 練習說明句：學習內容，受學習字級 */
 .practice-instruction {
   margin: 0.55rem 0 0;
-  font-size: calc(0.95rem * var(--learning-scale));
+  font-size: calc(1.05rem * var(--learning-scale));
   font-weight: 600;
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   color: var(--teal);
@@ -531,7 +527,6 @@ main {
   padding: 0.5rem 0.75rem;
   text-align: center;
 }
-
 /* 畫布區（左右換字箭頭＋大正方形田字格） */
 .canvas-zone {
   display: flex;
@@ -555,7 +550,7 @@ main {
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--green);
-  font-size: 1.45rem;
+  font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
@@ -597,7 +592,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(min(46vw, 180px) * var(--learning-scale));
+  font-size: calc(min(46vw, 248px) * var(--learning-scale));
   color: rgba(60, 60, 60, 0.25);
   padding: 1.35rem;
   box-sizing: border-box;
@@ -605,7 +600,7 @@ main {
 .static-note {
   text-align: center;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   padding: 0.35rem;
 }
 
@@ -616,7 +611,7 @@ main {
   z-index: 2;
   background: var(--green);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 700;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
@@ -633,7 +628,7 @@ main {
   max-width: 94%;
   background: rgba(43, 110, 79, 0.88);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   line-height: 1.4;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
@@ -659,9 +654,9 @@ main {
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--ink);
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
-  min-height: var(--touch);
+  min-height: var(--touch-2);
   padding: 0.55rem 1rem;
   border-radius: 0.7rem;
   cursor: pointer;
@@ -675,7 +670,7 @@ main {
   border-color: var(--teal);
   color: var(--teal);
   font-weight: 700;
-  white-space: nowrap;
+  white-space: normal;
 }
 .btn-accent {
   background: var(--accent);
@@ -691,7 +686,7 @@ main {
 }
 .practice-primary .btn {
   min-height: var(--touch);
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   background: var(--green);
   border-color: var(--green);
@@ -711,10 +706,10 @@ main {
 .practice-settings summary {
   cursor: pointer;
   list-style: none;
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--muted);
-  min-height: 2.4rem;
+  min-height: var(--touch-2);
   display: flex;
   align-items: center;
 }
@@ -730,8 +725,8 @@ main {
 .practice-options .btn {
   flex: 1 1 auto;
   min-width: 5.3rem;
-  min-height: 2.6rem;
-  font-size: 0.9rem;
+  min-height: var(--touch-2);
+  font-size: 1rem;
   font-weight: 600;
 }
 .btn-ghost-btn { background: transparent; }
@@ -744,13 +739,13 @@ main {
 
 /* 矮橫式（<600px 高，如橫放手機）：單欄可捲動、字畫布縮小 */
 @media (max-height: 500px) {
-  .detail-word { font-size: calc(2.2rem * var(--learning-scale)); }
+  .detail-word { font-size: calc(2.4rem * var(--learning-scale)); }
   .detail-inner {
     padding-top: calc(0.5rem + env(safe-area-inset-top));
   }
   .canvas-zone { margin: 0.4rem auto; flex: 0 1 auto; }
   .canvas-stack { width: min(100%, 46dvh, 340px); }
-  .practice-primary .btn { min-height: 2.5rem; font-size: 0.95rem; }
+  .practice-primary .btn { min-height: var(--touch); font-size: 0.95rem; }
 }
 
 /* ── 國語辭典：入口靠近生字，閱讀區固定在宿主安全範圍內 ── */
@@ -760,11 +755,11 @@ main {
   padding-top: 0.55rem;
 }
 .detail-dict summary {
-  font-size: 0.83rem;
+  font-size: 0.9rem;
   color: var(--green);
   font-weight: 700;
   cursor: pointer;
-  min-height: 2.4rem;
+  min-height: var(--touch-2);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -817,8 +812,8 @@ main {
 }
 .dict-nav .btn {
   flex: 1 1 0;
-  min-height: 2.5rem;
-  font-size: 0.8rem;
+  min-height: var(--touch-2);
+  font-size: 1rem;
   font-weight: 700;
   color: var(--green);
 }
@@ -871,31 +866,32 @@ main {
 .book-tag {
   background: var(--accent);
   color: #fff;
-  font-size: 0.61rem;
+  font-size: 0.82rem;
   font-weight: 700;
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
   white-space: nowrap;
 }
 .dict-ex-inline {
-  font-size: calc(0.8rem * var(--learning-scale));
+  font-size: calc(0.82rem * var(--learning-scale));
   font-weight: 500;
   color: var(--accent);
   margin-left: 0.2rem;
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
 }
-.dict-defs { margin: 0.4rem 0 0; padding-left: 1.1rem; color: var(--ink); font-size: calc(0.84rem * var(--learning-scale)); }
+.dict-defs { margin: 0.4rem 0 0; padding-left: 1.1rem; color: var(--ink); font-size: calc(0.82rem * var(--learning-scale)); }
 .dict-defs li { margin-bottom: 0.3rem; line-height: 1.55; }
-.dict-ex { color: var(--muted); font-size: calc(0.78rem * var(--learning-scale)); margin-left: 0.35rem; font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif; }
+.dict-ex { color: var(--muted); font-size: calc(0.82rem * var(--learning-scale)); margin-left: 0.35rem; font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif; }
 .dict-none { color: var(--muted); font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif; }
 .meta-item {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: var(--muted);
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 0.45rem;
   padding: 0.12rem 0.5rem;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
 }
 
 /* ── 進入引導（大圖卡選課；全螢幕浮層）── */
@@ -914,7 +910,7 @@ main {
 .setup-head { text-align: center; margin-bottom: 1rem; }
 .setup-title {
   display: block;
-  font-size: 1.45rem;
+  font-size: 1.3rem;
   font-weight: 800;
   color: var(--green);
   margin-bottom: 0.45rem;
@@ -928,7 +924,7 @@ main {
 .setup-step { margin-bottom: 0.9rem; }
 .setup-step-label {
   color: var(--green);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 800;
   margin-bottom: 0.5rem;
   display: flex;
@@ -938,7 +934,7 @@ main {
 }
 .setup-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6.4rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
   gap: 0.55rem;
 }
 .setup-card {
@@ -948,7 +944,7 @@ main {
   border-radius: var(--radius);
   background: var(--card);
   color: var(--ink);
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-family: inherit;
   display: flex;
   flex-wrap: wrap;
@@ -969,7 +965,7 @@ main {
   color: var(--green);
   font-weight: 700;
 }
-.setup-card-course { min-height: 3.2rem; font-size: 0.95rem; }
+.setup-card-course { min-height: 3.6rem; font-size: 0.95rem; }
 .setup-card[data-k="0"] { grid-column: 1 / -1; }
 .setup-foot {
   display: flex;
@@ -1042,12 +1038,12 @@ main {
   gap: 0.7rem;
 }
 .worksheet-panel-head h2 {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: var(--green);
 }
 .worksheet-selection {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink);
   background: var(--green-soft);
@@ -1062,7 +1058,7 @@ main {
   padding: 0.5rem 0.7rem 0.7rem;
 }
 .worksheet-scope legend {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--muted);
   padding: 0 0.3rem;
@@ -1086,7 +1082,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--muted);
 }
@@ -1123,7 +1119,7 @@ main {
 .worksheet-status[data-state="error"],
 .worksheet-status[data-state="uncertain"] { color: #9b3d1b; }
 .worksheet-hint {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.6;
 }
@@ -1160,15 +1156,12 @@ main {
   }
   .topbar h1 { font-size: 1.2rem; }
   .current-selection {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
+    display: block;
   }
   .topbar .progress-pill { margin-left: 0; width: max-content; }
   .topbar-actions {
@@ -1181,8 +1174,7 @@ main {
 
   /* ── 字卡頁：右移側欄、卡片加大 ── */
   main { width: calc(100% - var(--side-w)); margin-left: var(--side-w); padding: 1.1rem; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(6.9rem, 1fr)); gap: 0.8rem; }
-  .char-card .card-body { font-size: calc(min(2.9rem, 5.5vw) * var(--learning-scale)); }
+  .grid { gap: 0.8rem; }
 
   /* ── 選課：右移側欄 ── */
   .setup {
@@ -1259,12 +1251,11 @@ main {
 
 /* 手機主要操作並排，避免必須滑過三個大按鈕才能換模式。 */
 @media (max-width: 719px) {
-  .detail-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 0.5rem; }
-  .detail-back { grid-column: 2; grid-row: 1; min-height: 44px; font-size: 0.78rem; padding: 0.3rem 0.6rem; }
-  .detail-word { grid-column: 1; grid-row: 1 / span 2; font-size: calc(2.8rem * var(--learning-scale)); }
-  .detail-meta { grid-column: 2; font-size: 0.72rem; }
+  .detail-back { min-height: var(--touch); font-size: 0.95rem; padding: 0.3rem 0.6rem; }
+  .detail-word { font-size: calc(2.8rem * var(--learning-scale)); }
+  .detail-meta { font-size: 0.82rem; }
   .practice-instruction { font-size: calc(0.82rem * var(--learning-scale)); }
   .practice-primary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
-  .practice-primary .btn { font-size: 0.8rem; padding: 0.4rem 0.15rem; }
+  .practice-primary .btn { font-size: 0.95rem; padding: 0.4rem 0.15rem; }
 }
 

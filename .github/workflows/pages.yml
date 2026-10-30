@@ -1,5 +1,7 @@
 # GitHub Pages（workflow-only 模式）：push main 或手動觸發 → 構建 _site/（網站＋446 份固定習字本 PDF）→ 部署。
 # 本機與 CI 執行同一條命令：npm ci && npx playwright install chromium && npm run build
+# 部署成功後才清理 github-pages 環境的舊部署紀錄與同名產物，只保留本次成功版本。
+# 不刪 Git 歷史、Actions 執行紀錄或其他環境；部署失敗時保留上一個可用版本。
 name: Build & deploy worksheets site
 
 on:
@@ -58,3 +60,65 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  cleanup:
+    # 獨立 job：等 deploy job 完成，環境狀態變成 success 後才刪舊版本。
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+      actions: write
+    steps:
+      - name: Keep only the latest successful Pages deployment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const repo = context.repo;
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              ...repo, environment: 'github-pages', per_page: 100
+            });
+            deployments.sort((a, b) => b.id - a.id);
+            const latest = deployments[0];
+            if (!latest || latest.sha !== context.sha) {
+              throw new Error('Latest Pages deployment does not match this release; nothing deleted.');
+            }
+            const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
+              ...repo, deployment_id: latest.id, per_page: 1
+            });
+            if (statuses[0]?.state !== 'success') {
+              throw new Error('Latest Pages deployment is not successful; nothing deleted.');
+            }
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              ...repo, name: 'github-pages', per_page: 100
+            });
+            const keepArtifact = artifacts
+              .filter(a => a.name === 'github-pages' && !a.expired && a.workflow_run?.id === context.runId)
+              .sort((a, b) => b.id - a.id)[0];
+            if (!keepArtifact) {
+              throw new Error('Current Pages artifact not found; nothing deleted.');
+            }
+            core.info(`Keeping deployment ${latest.id} and artifact ${keepArtifact.id}.`);
+            for (const deployment of deployments.slice(1)) {
+              // 只能清理此環境；先標記 inactive 才能刪除，且不影響其他部署。
+              if (deployment.environment !== 'github-pages') continue;
+              const { data: previous } = await github.rest.repos.listDeploymentStatuses({
+                ...repo, deployment_id: deployment.id, per_page: 1
+              });
+              if (['queued', 'pending', 'in_progress', 'waiting'].includes(previous[0]?.state)) {
+                core.warning(`Skipping deployment ${deployment.id}: still running.`);
+                continue;
+              }
+              if (previous[0]?.state !== 'inactive') {
+                await github.rest.repos.createDeploymentStatus({
+                  ...repo, deployment_id: deployment.id, state: 'inactive', auto_inactive: false,
+                  description: 'Superseded by the latest successful GitHub Pages deployment.'
+                });
+              }
+              await github.rest.repos.deleteDeployment({ ...repo, deployment_id: deployment.id });
+              core.info(`Deleted old Pages deployment ${deployment.id}.`);
+            }
+            for (const artifact of artifacts) {
+              if (artifact.name !== 'github-pages' || artifact.id >= keepArtifact.id) continue;
+              await github.rest.actions.deleteArtifact({ ...repo, artifact_id: artifact.id });
+              core.info(`Deleted old Pages artifact ${artifact.id}.`);
+            }
