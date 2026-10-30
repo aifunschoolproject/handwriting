@@ -19,7 +19,7 @@
  * 兩種通道：
  *   1. 一般瀏覽器：fetch（AbortController 上限 60 秒、不重試）→ 驗證 %PDF-
  *      檔頭 → Blob → 同域 blob 錨點（a.download 帶中文檔名）。存檔位置由瀏覽器
- *      決定，只回報「下載已開始」。
+ *      決定，只回報「下載已開始」，提示家長在完成後檢查下載資料夾或自選位置。
  *   2. 嵌入式 WebView：偵測＝window.vuplex.postMessage 存在（永遠優先）
  *      或 Android WebView UA（含「; wv)」）。
  *      送出 window.vuplex.postMessage(JSON.stringify({type:'worksheet',
@@ -28,6 +28,8 @@
  *      Unity 直接呼叫 window.hwWorksheetAck({requestId, ok, error})。
  *      ok 必須嚴格 === true 才算成功；error 代碼（http_error/invalid_url/
  *      invalid_filename/cancelled/save_failed）映射為中文訊息。
+ *      成功 ACK 才提示 PDF 已存至平板的「下載」資料夾；提示保留在面板，
+ *      顯示時捲到提示位置，避免大字平板版面將訊息藏在畫面下方。
  *      15 秒無 ACK → 狀態「不確定」，按鈕保持停用（不重複送出），仍接受遲到 ACK。
  *      橋接就緒最多等 2 秒（vuplex 可能尚未掛上；vuplexready 事件為安全網）；
  *      逾時仍無 → 直接報錯，不在不支援的 WebView 內啟動下載；一般瀏覽器完全不等待。
@@ -165,6 +167,9 @@
     }
     const btn = el('btnWorksheetDownload');
     if (btn) btn.disabled = busy;
+    if (state === 'done' && shown && statusBox) {
+      statusBox.scrollIntoView({ block: 'start', behavior: 'instant' });
+    }
   }
 
   function setState(next, msg) {
@@ -250,7 +255,7 @@
       lastResult = {
         resultKey: keyOf(current),
         scope: current.scope, fileName: fileName, ok: true,
-        message: '下載已開始（' + fileName + '）。存檔位置由你的瀏覽器決定。',
+        message: '下載已開始：' + fileName + '\n下載完成後，請家長開啟「檔案管理員」→「下載」查看 PDF；若瀏覽器另選存檔位置，請至該位置查看。',
       };
       setState('done', lastResult.message);
     } catch (err) {
@@ -303,7 +308,7 @@
       lastResult = {
         resultKey: keyOf(current),
         scope: current.scope, fileName: pa.fileName, ok: true,
-        message: '已存檔：' + pa.fileName,
+        message: '下載完成！PDF 已儲存在平板的「下載」資料夾。\n請家長開啟「檔案管理員」→「下載」，找到以下檔案即可開啟或列印：\n' + pa.fileName,
       };
       setState('done', lastResult.message);
     } else {

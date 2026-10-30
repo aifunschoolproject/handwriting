@@ -1114,8 +1114,16 @@ main {
   color: var(--muted);
   min-height: 1.2em;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
-.worksheet-status[data-state="done"] { color: var(--green); }
+.worksheet-status[data-state="done"] {
+  color: var(--green);
+  background: var(--green-soft);
+  border: 1px solid var(--green);
+  border-radius: var(--radius);
+  padding: 0.65rem;
+  font-weight: 600;
+}
 .worksheet-status[data-state="error"],
 .worksheet-status[data-state="uncertain"] { color: #9b3d1b; }
 .worksheet-hint {
