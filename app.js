@@ -904,6 +904,8 @@ function bindTextLayout() {
     const padding = parseFloat(getComputedStyle(probe).paddingLeft) * 2;
     const textWidth = width - padding;
     if (textWidth <= 0) return;
+    // 只切換大字版的間距與視覺層次，不參與已校正的字級計算。
+    document.documentElement.classList.toggle('large-text', textWidth >= 300);
     grid.style.setProperty('--card-min', `${Math.ceil(width)}px`);
     // 只傳無單位比例，CSS 保留 rem。WebView 回報的 fontSize 可能已含
     // textZoom；轉成 px 再寫回 font-size 會讓同一縮放被套用第二次。

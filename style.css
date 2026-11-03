@@ -1381,3 +1381,81 @@ main {
 .setup-foot-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem; }
 .setup-foot .btn { padding: 0.3rem; min-height: var(--touch); font-size: 0.9rem; }
 .setup-summary { margin: 0.5rem 0; }
+
+/* 大字版：由實際字形寬度切換，字級與宿主安全區維持原有規則。
+   留白以 px 為主，避免系統字級與 rem 同時增大造成過量空白。 */
+.large-text .topbar { gap: 12px; padding: calc(16px + env(safe-area-inset-top)) 16px 16px; }
+.large-text .topbar h1 { letter-spacing: 0; }
+.large-text .topbar-actions { gap: 10px; }
+.large-text .topbar .btn { padding: 12px; }
+.large-text .topbar .btn-download { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.1em; }
+.large-text .topbar .btn-download span { min-width: 0; max-width: 100%; }
+.large-text .topbar h1 span { display: inline-block; max-width: 100%; }
+.large-text .current-selection { line-height: 1.45; }
+.large-text .progress-pill { padding: 6px 16px; border-radius: 16px; }
+.large-text main { padding: 20px; }
+.large-text .grid-head { gap: 12px; margin-bottom: 20px; align-items: flex-start; }
+.large-text .grid { gap: 20px; }
+.large-text .char-card {
+  background-image: none;
+  border-color: var(--line);
+  border-radius: 20px;
+  grid-template-rows: auto minmax(min-content, 1fr) auto;
+  gap: 12px;
+  padding: 12px;
+  box-shadow: 0 3px 12px rgba(60, 80, 50, .07);
+}
+.large-text .char-card.done { border-color: var(--green); }
+.large-text .char-card .card-body {
+  align-self: stretch;
+  padding-block: 12px;
+  border-radius: 12px;
+  background-color: #fffdf9;
+  background-image:
+    linear-gradient(to right, transparent calc(50% - .5px), var(--cell-line) calc(50% - .5px), var(--cell-line) calc(50% + .5px), transparent calc(50% + .5px)),
+    linear-gradient(to bottom, transparent calc(50% - .5px), var(--cell-line) calc(50% - .5px), var(--cell-line) calc(50% + .5px), transparent calc(50% + .5px));
+}
+.large-text .char-card .rad-badge { border-radius: 10px; padding: 0 10px; }
+.large-text .char-card .strokes { color: var(--ink); padding-right: 6px; }
+.large-text .char-card .done-mark { min-width: 1.6rem; width: auto; height: auto; padding: 4px 10px; }
+
+.large-text .setup-head { margin-bottom: 20px; }
+.large-text .setup-steps { counter-reset: setup-step; }
+.large-text .setup-step {
+  counter-increment: setup-step;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.large-text .setup-step-label { gap: 12px; margin-bottom: 12px; align-items: center; }
+.large-text .setup-step-label::before {
+  content: counter(setup-step);
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5em;
+  min-height: 1.5em;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+}
+.large-text .setup-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, max(5rem, 250px)), 1fr)); gap: 12px; }
+.large-text .setup-card { padding: 12px; border-radius: 12px; box-shadow: none; }
+.large-text .setup-card.on { border-width: 3px; background: var(--green-soft); }
+.large-text .setup-foot { padding-top: 12px; border-top: 2px solid var(--line); }
+.large-text .setup-foot-actions { gap: 12px; }
+.large-text .setup-foot .btn { border-radius: 14px; }
+
+.large-text .detail-inner { gap: 16px; padding: calc(16px + env(safe-area-inset-top)) 20px 20px; }
+.large-text .detail-head { gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.large-text .detail-back { padding: 10px 16px; }
+.large-text .detail-meta { gap: 10px; }
+.large-text .meta-item { padding: 6px 12px; border-radius: 10px; }
+.large-text .detail-actions { gap: 12px; }
+.large-text .practice-primary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); gap: 12px; }
+.large-text .practice-primary .btn { padding: 12px; border-radius: 14px; }
+.large-text .practice-primary .btn:last-child { grid-column: 1 / -1; background: var(--card); color: var(--green); }
+.large-text .practice-instruction { padding: 16px; margin-top: 0; text-align: left; line-height: 1.8; border-radius: 14px; }
+.large-text .practice-settings { padding: 8px 16px; border-radius: 14px; }
+.large-text .detail-dict { margin-top: 0; padding-top: 12px; }
