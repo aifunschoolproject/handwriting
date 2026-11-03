@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 發布時遞增版本，並更新已修改資源的 v，供 update.js 偵測新版。
-     2026.11.03.1：大字體注音留白、字卡資訊分列；寫字區依可用寬度重排。 -->
-<meta name="app-version" content="2026.11.03.1">
+     2026.11.03.2：依 WebView 實際文字尺寸重排字卡；選課主要操作常駐底部。 -->
+<meta name="app-version" content="2026.11.03.2">
 <title>手寫練習</title>
-<link rel="stylesheet" href="style.css?v=50">
+<link rel="stylesheet" href="style.css?v=51">
 </head>
 <body class="handwriting-app">
 <header class="topbar">
@@ -50,13 +50,15 @@
 <!-- 進入引導：大圖卡選 版本／年級／學期／課次；選好後手按「開始練習」 -->
 <div class="setup" id="setup" role="region" aria-labelledby="setupTitle">
   <div class="setup-inner">
+    <div class="setup-scroll" id="setupScroll" tabindex="0" aria-label="選課內容，可上下捲動">
     <div class="setup-head">
       <span class="setup-title" id="setupTitle" tabindex="-1">今天想練哪一課？</span>
       <span class="setup-sub">選好版本、年級、學期與課次，再按「開始練習」。</span>
     </div>
     <div class="setup-steps" id="setupSteps"></div>
+      <p class="setup-summary" id="setupSummary"></p>
+    </div>
     <div class="setup-foot">
-      <span class="setup-summary" id="setupSummary"></span>
       <div class="setup-foot-actions">
         <button class="btn btn-accent" id="btnStart">開始練習</button>
         <button class="btn btn-download" data-open-download>下載習字本</button>
@@ -169,7 +171,7 @@
 <script src="dict.js?v=5"></script>
 <script src="bpmf.js?v=8"></script>
 <script src="worksheet-download.js?v=2"></script>
-<script src="app.js?v=48"></script>
+<script src="app.js?v=49"></script>
 <script src="update.js?v=4"></script>
 </body>
 </html>

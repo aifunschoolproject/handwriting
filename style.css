@@ -347,7 +347,7 @@ main {
 /* 字卡依放大後字級決定欄數；空間不足時減欄，不壓縮生字或水平溢出。 */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.6rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--card-min, 7.6rem)), 1fr));
   gap: 0.6rem;
   container: grid / inline-size;
   margin-bottom: 1rem;
@@ -390,14 +390,14 @@ main {
   gap: 0.08em;
   max-width: 100%;
   padding: 0 0.35rem;
-  font-size: 3.8rem;
-  font-size: min(3.8rem, 54cqw);
+  font-size: var(--card-font, 3.8rem);
 }
 .char-card .char {
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   order: 1;
   color: #555;
   line-height: 1;
+  flex: none;
 }
 /* 右側直排注音容器：內放 .z-word（.z-char 本字＋.z-ruby 直排小字） */
 .char-card .zhuyin {
@@ -409,6 +409,7 @@ main {
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+  flex: none;
 }
 .char-card .rad-badge {
   grid-column: 1;
@@ -1337,3 +1338,45 @@ main {
   .canvas-stack { grid-column: 1 / -1; grid-row: 1; width: 100%; }
   .side-arrow { justify-self: center; }
 }
+
+/* WebView 的文字縮放不一定改變 rem；app.js 量測實際字與注音寬度。 */
+.text-metric {
+  position: fixed;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  gap: 0.08em;
+  font-size: 3.8rem;
+  line-height: 1;
+}
+.text-metric > .char { font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif; flex: none; }
+.detail.text-reflow .detail-inner { display: flex; }
+.detail.text-reflow .canvas-zone {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0.8rem auto;
+  max-width: 640px;
+}
+.detail.text-reflow .canvas-stack { grid-column: 1 / -1; grid-row: 1; width: 100%; }
+.detail.text-reflow .side-arrow { justify-self: center; }
+
+/* 選課內容獨立捲動；主要操作不隨課次列表離開畫面，也不覆蓋內容。 */
+.setup { overflow: hidden; padding: 0.5rem; }
+.setup-inner { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.setup-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.5rem;
+}
+.setup-foot { flex: none; margin: 0; padding: 0.35rem 0 0; background: var(--bg); }
+.setup-foot-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem; }
+.setup-foot .btn { padding: 0.3rem; min-height: var(--touch); font-size: 0.9rem; }
+.setup-summary { margin: 0.5rem 0; }

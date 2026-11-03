@@ -510,7 +510,7 @@ function bindDictScroll() {
  * 超過門檻才捕捉 pointer，拖曳後吃掉合成 click，避免滑過課卡／按鈕卻誤觸。
  */
 function bindPanelScroll() {
-  const regions = '.topbar, main, #setup, .detail-inner, #dictBody, .worksheet-panel-inner';
+  const regions = '.topbar, main, #setupScroll, .detail-inner, #dictBody, .worksheet-panel-inner';
   let drag = null;
   let suppressClick = false;
 
@@ -851,7 +851,7 @@ function showSetup() {
   $('setup').hidden = false;
   document.querySelector('main').inert = true;
   $('appSettings').open = false;
-  $('setup').scrollTop = 0;
+  $('setupScroll').scrollTop = 0;
   $('setupTitle').focus({ preventScroll: true });
 }
 function initSetup() {
@@ -889,6 +889,36 @@ function loadFs() {
   setFs(FS_LEVELS.includes(saved) ? saved : 22);
 }
 
+/* Android WebView textZoom 可能只放大字形，不改變 rem 或 media query。
+ * 量測與字卡相同的完整漢字＋三符號注音，不用裝置型號猜縮放倍率。
+ * 量測節點不受計算結果影響，避免 ResizeObserver 自我放大。 */
+function bindTextLayout() {
+  const probe = document.createElement('span');
+  probe.className = 'text-metric';
+  probe.setAttribute('aria-hidden', 'true');
+  probe.innerHTML = '<span class="char">國</span>' + window.bpmfRuby('ㄓㄨㄤˋ');
+  document.body.appendChild(probe);
+  const update = () => {
+    const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const width = probe.getBoundingClientRect().width;
+    if (!width || !grid.clientWidth) return;
+    const padding = root * 1.6;
+    grid.style.setProperty('--card-min', `${Math.ceil(width + padding)}px`);
+    // 僅在單張字卡仍放不下時等比調整學習字；不縮小介面文字。
+    grid.style.setProperty('--card-font',
+      `${3.8 * root * Math.min(1, Math.max(1, grid.clientWidth - padding) / width)}px`);
+    const available = detail.clientWidth;
+    detail.classList.toggle('text-reflow', available > 0 && available < width * 4.5);
+  };
+  const observer = new ResizeObserver(update);
+  observer.observe(probe);
+  observer.observe(grid);
+  observer.observe(detail);
+  document.fonts.ready.then(update);
+  window.addEventListener('resize', update);
+  update();
+}
+
 /* ── 啟動 ── */
 loadFs();
 loadDone();
@@ -899,3 +929,4 @@ renderGrid();
 bind();
 annotateUI();
 initSetup();
+bindTextLayout();
