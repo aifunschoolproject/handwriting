@@ -83,7 +83,12 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* 所有 rem 只透過根字級縮放，避免生字內容被重複放大。 */
-html { font-size: calc(206.25% * var(--ui-scale)); }
+html {
+  font-size: calc(206.25% * var(--ui-scale));
+  /* 防止行動瀏覽器只放大部分文字；仍保留使用者根字級與頁面縮放。 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 html, body { height: 100%; }
 
@@ -277,8 +282,8 @@ button, input { font-family: inherit; }
    .z-ruby > .z-tone-light（輕聲 ˙，最上）＋ .z-main
    .z-main > .z-bopo（符號直排）＋ .z-tone（聲調，符號列右側）
    字號 0.34em：3 個符號約主字字高，長注音不擠主字。 */
-.z-word { display: inline-flex; align-items: center; vertical-align: middle; margin: 0 1px; }
-.z-char { font-size: 1em; line-height: 1; }
+.z-word { display: inline-flex; align-items: center; vertical-align: middle; margin: 0.08em 1px; white-space: nowrap; }
+.z-char { flex: none; font-size: 1em; line-height: 1.1; }
 .z-ruby {
   display: flex;
   flex-direction: column;
@@ -293,8 +298,8 @@ button, input { font-family: inherit; }
   flex-shrink: 0;
 }
 .z-main { display: flex; flex-direction: row; align-items: stretch; }
-.z-bopo { display: flex; flex-direction: column; align-items: center; width: 1em; line-height: 0.95; }
-.z-bopo span { display: block; }
+.z-bopo { display: flex; flex-direction: column; align-items: center; min-width: 1em; line-height: 1.1; }
+.z-bopo span { display: block; flex: none; }
 .z-tone {
   display: flex;
   align-items: center;
@@ -302,10 +307,10 @@ button, input { font-family: inherit; }
   line-height: 1;
   font-weight: 900;
   margin-left: 1px;
-  width: 0.6em;
+  min-width: 0.6em;
   justify-content: center;
 }
-.z-tone-light { font-size: 1.1em; line-height: 0.7; margin-bottom: 0.05em; font-weight: 900; }
+.z-tone-light { font-size: 1.1em; line-height: 1; margin-bottom: 0.05em; font-weight: 900; }
 /* ── Grid（字卡頁）────────────────────────────────────
    寬版 main 以左邊距避開宿主欄；窄版整個應用視口縮短，
    所有捲動內容都裁在 --host-safe-height 安全帶上方。 */
@@ -361,9 +366,14 @@ main {
   border: 2px solid var(--cell-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(1.6rem, auto) 1fr auto;
+  gap: 0.2rem;
+  padding: 0.3rem 0.35rem;
+  min-width: 0;
+  container: card / inline-size;
   align-items: center;
-  justify-content: center;
   cursor: pointer;
   transition: transform .12s, box-shadow .12s, border-color .12s;
 }
@@ -371,6 +381,8 @@ main {
 /* 本字＋右側注音同置中：.card-body 橫排（字左、注音右），注音不擠字。
    容器字號＝本字字號 → .z-ruby 的 0.34em 即主字×0.34（3 符號約一字高）。 */
 .char-card .card-body {
+  grid-column: 1 / -1;
+  grid-row: 2;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -379,6 +391,7 @@ main {
   max-width: 100%;
   padding: 0 0.35rem;
   font-size: 3.8rem;
+  font-size: min(3.8rem, 54cqw);
 }
 .char-card .char {
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
@@ -398,9 +411,9 @@ main {
   white-space: nowrap;
 }
 .char-card .rad-badge {
-  position: absolute;
-  bottom: 0.3rem;
-  left: 0.35rem;
+  grid-column: 1;
+  grid-row: 3;
+  justify-self: start;
   font-size: 1.3rem;
   font-family: "TW-Kai", "BiauKai", "Kaiti TC", serif;
   color: var(--green);
@@ -415,16 +428,16 @@ main {
   white-space: nowrap;
 }
 .char-card .strokes {
-  position: absolute;
-  bottom: 0.35rem;
-  right: 0.5rem;
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: end;
   font-size: 0.82rem;
   color: var(--muted);
 }
 .char-card .done-mark {
-  position: absolute;
-  top: 0.3rem;
-  right: 0.4rem;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
   width: 1.6rem;
   height: 1.6rem;
   border-radius: 50%;
@@ -447,9 +460,12 @@ main {
   border-radius: 0.35rem;
 }
 .char-card .type-tag {
-  position: absolute;
-  top: 0.38rem;
-  right: 1.9rem;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: start;
+}
+@container card (max-width: 6rem) {
+  .char-card .type-tag { padding-inline: 0.1rem; }
 }
 
 /* ── Detail 寫字視窗 ─────────────────────────────────
@@ -462,6 +478,7 @@ main {
   inset: 0 0 var(--content-bottom) var(--side-w);
   z-index: 50;
   background: rgba(25, 40, 30, .45);
+  container: detail / inline-size;
 }
 .detail[hidden] { display: none; }
 
@@ -951,7 +968,7 @@ main {
 }
 .setup-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr));
   gap: 0.55rem;
 }
 .setup-card {
@@ -1012,7 +1029,7 @@ main {
   color: #fff;
 }
 @media (max-width: 480px) {
-  .setup-cards { grid-template-columns: repeat(auto-fill, minmax(5.3rem, 1fr)); }
+  .setup-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 5.3rem), 1fr)); }
   .setup-card { min-height: 3.3rem; font-size: 0.83rem; padding: 0.45rem; }
   .setup-card-course { min-height: 3.7rem; font-size: 0.89rem; }
 }
@@ -1208,7 +1225,7 @@ main {
   }
   .setup-inner { max-width: 1050px; margin: 0 auto; }
   .setup-head { text-align: left; margin-bottom: 1rem; }
-  .setup-cards { grid-template-columns: repeat(auto-fit, minmax(5.4rem, 1fr)); }
+  .setup-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.4rem), 1fr)); }
   .setup-card { min-height: 3.1rem; padding: 0.5rem; }
   .setup-foot { align-items: center; gap: 1rem; }
 
@@ -1218,7 +1235,7 @@ main {
     left: 0;
     display: grid;
     grid-template-columns: minmax(230px, 30%) minmax(0, 1fr);
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
     grid-template-areas:
       "head   right"
       "dict   right"
@@ -1289,7 +1306,34 @@ main {
   .detail-word { font-size: 2.8rem; }
   .detail-meta { font-size: 0.82rem; }
   .practice-instruction { font-size: 0.82rem; }
-  .practice-primary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
+  .practice-primary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 5rem), 1fr)); gap: 0.35rem; }
   .practice-primary .btn { font-size: 0.95rem; padding: 0.4rem 0.15rem; }
 }
 
+/* 大字級重排：以實際容器與 rem 比較，不只看裝置像素寬。
+   舊 WebView 不支援容器查詢時保留單欄，優先確保內容可捲動。 */
+.btn, .setup-card { min-width: 0; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.detail-back, .practice-options .btn { min-width: min(100%, 5.4rem); }
+.topbar > *, .settings-body > *, .detail-inner > * { min-width: 0; }
+.progress-pill { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.dict-reader-head, .worksheet-panel-head, .dict-rad { flex-wrap: wrap; }
+.worksheet-scope { min-width: 0; }
+.detail-word, .detail-zhuyin { flex-shrink: 0; }
+.detail-word { max-width: 100%; flex-wrap: wrap; }
+
+@container detail (max-width: 27rem) {
+  .detail-inner { display: flex; }
+  .canvas-zone { margin: 0.8rem auto; max-width: 640px; }
+}
+@container detail (max-width: 20rem) {
+  /* 換字鈕移至畫布下方，放大字級時不犧牲可書寫寬度。 */
+  .canvas-zone { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .canvas-stack { grid-column: 1 / -1; grid-row: 1; width: 100%; }
+  .side-arrow { justify-self: center; }
+}
+@supports not (container-type: inline-size) {
+  .detail-inner { display: flex; }
+  .canvas-zone { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0.8rem auto; }
+  .canvas-stack { grid-column: 1 / -1; grid-row: 1; width: 100%; }
+  .side-arrow { justify-self: center; }
+}
