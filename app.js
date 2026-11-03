@@ -899,16 +899,18 @@ function bindTextLayout() {
   probe.innerHTML = '<span class="char">國</span>' + window.bpmfRuby('ㄓㄨㄤˋ');
   document.body.appendChild(probe);
   const update = () => {
-    const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
     const width = probe.getBoundingClientRect().width;
     if (!width || !grid.clientWidth) return;
-    const padding = root * 1.6;
-    grid.style.setProperty('--card-min', `${Math.ceil(width + padding)}px`);
-    // 僅在單張字卡仍放不下時等比調整學習字；不縮小介面文字。
-    grid.style.setProperty('--card-font',
-      `${3.8 * root * Math.min(1, Math.max(1, grid.clientWidth - padding) / width)}px`);
+    const padding = parseFloat(getComputedStyle(probe).paddingLeft) * 2;
+    const textWidth = width - padding;
+    if (textWidth <= 0) return;
+    grid.style.setProperty('--card-min', `${Math.ceil(width)}px`);
+    // 只傳無單位比例，CSS 保留 rem。WebView 回報的 fontSize 可能已含
+    // textZoom；轉成 px 再寫回 font-size 會讓同一縮放被套用第二次。
+    grid.style.setProperty('--card-fit',
+      String(Math.min(1, Math.max(1, grid.clientWidth - padding) / textWidth)));
     const available = detail.clientWidth;
-    detail.classList.toggle('text-reflow', available > 0 && available < width * 4.5);
+    detail.classList.toggle('text-reflow', available > 0 && available < textWidth * 4.5);
   };
   const observer = new ResizeObserver(update);
   observer.observe(probe);
